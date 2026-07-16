@@ -14,6 +14,7 @@ func TestAwsBedrockGlobalClaudeRatios(t *testing.T) {
 		model string
 		ratio float64
 	}{
+		{"claude-opus-4-6-v1", 2.5},
 		{"global.anthropic.claude-sonnet-4-6", 1.5},
 		{"global.anthropic.claude-haiku-4-5-20251001-v1:0", 0.5},
 		{"global.anthropic.claude-opus-4-6-v1", 2.5},

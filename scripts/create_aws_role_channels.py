@@ -365,6 +365,8 @@ def test_and_maybe_delete_channel(
         return True, "test=passed"
 
     error = format_test_failure(test_result)
+    if test_result.get("error_code") == "model_price_error":
+        return False, f"test failed: {error} kept"
     deleted = ""
     if not args.keep_on_test_failure:
         delete_result = delete_channel(
