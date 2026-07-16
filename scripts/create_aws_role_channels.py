@@ -173,17 +173,34 @@ def build_payload(
     return {"mode": "single", "channel": channel}
 
 
-def post_channel(base_url: str, cookie: str, payload: dict[str, Any], timeout: int) -> dict[str, Any]:
+def build_auth_headers(args: argparse.Namespace) -> dict[str, str]:
+    headers = {
+        "Content-Type": "application/json",
+        "New-Api-User": args.user_id,
+        "User-Agent": "new-api-aws-role-channel-cli",
+    }
+    if args.cookie:
+        headers["Cookie"] = args.cookie
+    if args.access_token:
+        token = args.access_token.strip()
+        if token.lower().startswith("bearer "):
+            token = token[7:].strip()
+        headers["Authorization"] = token
+    return headers
+
+
+def post_channel(
+    base_url: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    timeout: int,
+) -> dict[str, Any]:
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     request = urllib.request.Request(
         f"{base_url.rstrip('/')}/api/channel",
         data=body,
         method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Cookie": cookie,
-            "User-Agent": "new-api-aws-role-channel-cli",
-        },
+        headers=headers,
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         data = response.read().decode("utf-8")
@@ -196,6 +213,8 @@ def main() -> int:
     )
     parser.add_argument("--base-url", default=os.getenv("NEW_API_BASE_URL", ""))
     parser.add_argument("--cookie", default=os.getenv("NEW_API_COOKIE", ""))
+    parser.add_argument("--access-token", default=os.getenv("NEW_API_ACCESS_TOKEN", ""))
+    parser.add_argument("--user-id", default=os.getenv("NEW_API_USER_ID", ""))
     parser.add_argument("--role-arn", default=os.getenv("AWS_BEDROCK_ROLE_ARN", ""))
     parser.add_argument("--group", required=True)
     parser.add_argument("--regions", help="Comma-separated region list. Defaults to known accessible regions.")
@@ -222,9 +241,11 @@ def main() -> int:
         missing.append("--base-url or NEW_API_BASE_URL")
     if not args.role_arn:
         missing.append("--role-arn or AWS_BEDROCK_ROLE_ARN")
-    if missing or (not args.dry_run and not args.cookie):
+    if not args.dry_run and not args.user_id:
+        missing.append("--user-id or NEW_API_USER_ID")
+    if missing or (not args.dry_run and not (args.cookie or args.access_token)):
         if not args.dry_run:
-            missing.append("--cookie or NEW_API_COOKIE")
+            missing.append("--cookie/NEW_API_COOKIE or --access-token/NEW_API_ACCESS_TOKEN")
         parser.error("missing required value(s): " + ", ".join(missing))
 
     regions = load_regions(args)
@@ -245,10 +266,11 @@ def main() -> int:
 
     ok = 0
     failed = 0
+    auth_headers = build_auth_headers(args)
     for payload in payloads:
         channel = payload["channel"]
         try:
-            result = post_channel(args.base_url, args.cookie, payload, args.timeout)
+            result = post_channel(args.base_url, auth_headers, payload, args.timeout)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
             failed += 1
             print(f"[FAIL] {channel['name']}: {exc}", file=sys.stderr)
