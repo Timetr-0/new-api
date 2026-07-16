@@ -538,6 +538,7 @@
     "Average TTFT": "平均 TTFT",
     "AWS": "AWS",
     "AWS Bedrock Claude Compat": "AWS Bedrock Claude 互換テンプレート",
+    "AWS Global Claude Models": "AWS Global Claude モデル",
     "AWS Global Claude Opus 4.6": "AWS Global Claude Opus 4.6",
     "AWS Key Format": "AWSキーフォーマット",
     "Azure": "Azure",

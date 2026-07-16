@@ -538,6 +538,7 @@
     "Average TTFT": "Средний TTFT",
     "AWS": "AWS",
     "AWS Bedrock Claude Compat": "AWS Bedrock Claude совместимость",
+    "AWS Global Claude Models": "Модели AWS Global Claude",
     "AWS Global Claude Opus 4.6": "AWS Global Claude Opus 4.6",
     "AWS Key Format": "Формат ключа AWS",
     "Azure": "Azure",

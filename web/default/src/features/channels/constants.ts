@@ -372,16 +372,78 @@ export const FIELD_DESCRIPTIONS = {
   OPENAI_ORG: 'OpenAI Organization ID (optional)',
 } as const
 
-export const AWS_GLOBAL_CLAUDE_OPUS_46_MODELS = [
-  'claude-opus-4-6',
-  'claude-opus-4-6-v1',
-  'global.anthropic.claude-opus-4-6-v1',
+export const AWS_GLOBAL_CLAUDE_MODEL_MAPPINGS = [
+  [
+    'claude-3-sonnet-20240229',
+    'global.anthropic.claude-3-sonnet-20240229-v1:0',
+  ],
+  [
+    'claude-3-opus-20240229',
+    'global.anthropic.claude-3-opus-20240229-v1:0',
+  ],
+  [
+    'claude-3-haiku-20240307',
+    'global.anthropic.claude-3-haiku-20240307-v1:0',
+  ],
+  [
+    'claude-3-5-sonnet-20240620',
+    'global.anthropic.claude-3-5-sonnet-20240620-v1:0',
+  ],
+  [
+    'claude-3-5-sonnet-20241022',
+    'global.anthropic.claude-3-5-sonnet-20241022-v2:0',
+  ],
+  [
+    'claude-3-5-haiku-20241022',
+    'global.anthropic.claude-3-5-haiku-20241022-v1:0',
+  ],
+  [
+    'claude-3-7-sonnet-20250219',
+    'global.anthropic.claude-3-7-sonnet-20250219-v1:0',
+  ],
+  [
+    'claude-sonnet-4-20250514',
+    'global.anthropic.claude-sonnet-4-20250514-v1:0',
+  ],
+  [
+    'claude-opus-4-20250514',
+    'global.anthropic.claude-opus-4-20250514-v1:0',
+  ],
+  [
+    'claude-opus-4-1-20250805',
+    'global.anthropic.claude-opus-4-1-20250805-v1:0',
+  ],
+  [
+    'claude-sonnet-4-5-20250929',
+    'global.anthropic.claude-sonnet-4-5-20250929-v1:0',
+  ],
+  ['claude-sonnet-4-6', 'global.anthropic.claude-sonnet-4-6'],
+  [
+    'claude-haiku-4-5-20251001',
+    'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+  ],
+  [
+    'claude-opus-4-5-20251101',
+    'global.anthropic.claude-opus-4-5-20251101-v1:0',
+  ],
+  ['claude-opus-4-6', 'global.anthropic.claude-opus-4-6-v1'],
+  ['claude-opus-4-6-v1', 'global.anthropic.claude-opus-4-6-v1'],
+  ['claude-opus-4-7', 'global.anthropic.claude-opus-4-7'],
+  ['claude-opus-4-8', 'global.anthropic.claude-opus-4-8'],
+] as const
+
+export const AWS_GLOBAL_CLAUDE_MODELS = [
+  ...new Set(
+    AWS_GLOBAL_CLAUDE_MODEL_MAPPINGS.flatMap(([source, target]) => [
+      source,
+      target,
+    ])
+  ),
 ]
 
-export const AWS_GLOBAL_CLAUDE_OPUS_46_MAPPING = {
-  'claude-opus-4-6': 'global.anthropic.claude-opus-4-6-v1',
-  'claude-opus-4-6-v1': 'global.anthropic.claude-opus-4-6-v1',
-} as const
+export const AWS_GLOBAL_CLAUDE_MAPPING = Object.fromEntries(
+  AWS_GLOBAL_CLAUDE_MODEL_MAPPINGS
+)
 
 // ============================================================================
 // Channel Type Specific Configurations

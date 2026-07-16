@@ -137,8 +137,8 @@ import {
 } from '../../api'
 import {
   ADD_MODE_OPTIONS,
-  AWS_GLOBAL_CLAUDE_OPUS_46_MAPPING,
-  AWS_GLOBAL_CLAUDE_OPUS_46_MODELS,
+  AWS_GLOBAL_CLAUDE_MAPPING,
+  AWS_GLOBAL_CLAUDE_MODELS,
   CHANNEL_STATUS_LABELS,
   CHANNEL_TYPE_OPTIONS,
   CHANNEL_TYPE_WARNINGS,
@@ -1534,10 +1534,10 @@ export function ChannelMutateDrawer({
       }
     }
 
-    updateModels(AWS_GLOBAL_CLAUDE_OPUS_46_MODELS, true)
+    updateModels(AWS_GLOBAL_CLAUDE_MODELS, true)
     const nextMapping = {
       ...mapping,
-      ...AWS_GLOBAL_CLAUDE_OPUS_46_MAPPING,
+      ...AWS_GLOBAL_CLAUDE_MAPPING,
     }
     form.setValue('model_mapping', JSON.stringify(nextMapping, null, 2))
     toast.success(t('Applied AWS Global Claude preset'))
@@ -3480,7 +3480,7 @@ export function ChannelMutateDrawer({
                                       className='mr-2 h-4 w-4'
                                       aria-hidden='true'
                                     />
-                                    {t('AWS Global Claude Opus 4.6')}
+                                    {t('AWS Global Claude Models')}
                                   </Button>
                                 </div>
                               )}

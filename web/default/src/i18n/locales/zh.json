@@ -538,6 +538,7 @@
     "Average TTFT": "平均首 Token 延迟",
     "AWS": "AWS",
     "AWS Bedrock Claude Compat": "AWS Bedrock Claude 兼容模板",
+    "AWS Global Claude Models": "AWS Global Claude 模型",
     "AWS Global Claude Opus 4.6": "AWS Global Claude Opus 4.6",
     "AWS Key Format": "AWS 密钥格式",
     "Azure": "Azure",
