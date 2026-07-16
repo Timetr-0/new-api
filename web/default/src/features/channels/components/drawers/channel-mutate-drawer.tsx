@@ -2286,6 +2286,10 @@ export function ChannelMutateDrawer({
                                           value: 'api_key',
                                           label: t('API Key'),
                                         },
+                                        {
+                                          value: 'role_arn',
+                                          label: t('Role ARN'),
+                                        },
                                       ]}
                                       onValueChange={field.onChange}
                                       value={field.value}
@@ -2307,15 +2311,24 @@ export function ChannelMutateDrawer({
                                           <SelectItem value='api_key'>
                                             {t('API Key')}
                                           </SelectItem>
+                                          <SelectItem value='role_arn'>
+                                            {t('Role ARN')}
+                                          </SelectItem>
                                         </SelectGroup>
                                       </SelectContent>
                                     </Select>
                                     <FormDescription>
-                                      {field.value === 'api_key'
-                                        ? t('API Key mode: use APIKey|Region')
-                                        : t(
-                                            'AK/SK mode: use AccessKey|SecretAccessKey|Region'
-                                          )}
+                                      {field.value === 'api_key' &&
+                                        t('API Key mode: use APIKey|Region')}
+                                      {field.value === 'role_arn' &&
+                                        t(
+                                          'Role ARN mode: use RoleARN|Region|RoleSessionName'
+                                        )}
+                                      {field.value !== 'api_key' &&
+                                        field.value !== 'role_arn' &&
+                                        t(
+                                          'AK/SK mode: use AccessKey|SecretAccessKey|Region'
+                                        )}
                                     </FormDescription>
                                     <FormMessage />
                                   </FormItem>
@@ -2909,6 +2922,21 @@ export function ChannelMutateDrawer({
                                   ) {
                                     keyPlaceholder = t(
                                       'Enter API Key, format: APIKey|Region'
+                                    )
+                                  } else if (
+                                    currentType === 33 &&
+                                    awsKeyType === 'role_arn' &&
+                                    isBatchMode
+                                  ) {
+                                    keyPlaceholder = t(
+                                      'Enter Role ARN, one per line, format: RoleARN|Region|RoleSessionName'
+                                    )
+                                  } else if (
+                                    currentType === 33 &&
+                                    awsKeyType === 'role_arn'
+                                  ) {
+                                    keyPlaceholder = t(
+                                      'Enter Role ARN, format: RoleARN|Region|RoleSessionName'
                                     )
                                   } else if (
                                     currentType === 33 &&

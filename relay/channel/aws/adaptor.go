@@ -23,6 +23,7 @@ type ClientMode int
 const (
 	ClientModeApiKey ClientMode = iota + 1
 	ClientModeAKSK
+	ClientModeRoleArn
 )
 
 type Adaptor struct {
@@ -89,7 +90,8 @@ func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
 func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
-	if info.ChannelOtherSettings.AwsKeyType == dto.AwsKeyTypeApiKey {
+	switch info.ChannelOtherSettings.AwsKeyType {
+	case dto.AwsKeyTypeApiKey:
 		awsModelId := getAwsModelID(info.UpstreamModelName)
 		a.ClientMode = ClientModeApiKey
 		awsSecret := strings.Split(info.ApiKey, "|")
@@ -97,7 +99,10 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			return "", errors.New("invalid aws api key, should be in format of <api-key>|<region>")
 		}
 		return fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com/model/%s/converse", awsModelId, awsSecret[1]), nil
-	} else {
+	case dto.AwsKeyTypeRoleArn:
+		a.ClientMode = ClientModeRoleArn
+		return "", nil
+	default:
 		a.ClientMode = ClientModeAKSK
 		return "", nil
 	}

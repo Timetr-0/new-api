@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/gin-gonic/gin"
@@ -52,4 +53,34 @@ func TestDoAwsClientRequest_AppliesRuntimeHeaderOverrideToAnthropicBeta(t *testi
 	values, ok := anthropicBeta.([]any)
 	require.True(t, ok)
 	require.Equal(t, []any{"computer-use-2025-01-24"}, values)
+}
+
+func TestGetRequestURL_SupportsRoleArnKeyType(t *testing.T) {
+	t.Parallel()
+
+	adaptor := &Adaptor{}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ApiKey: "arn:aws:iam::765009073093:role/BedrockInvokeRole|us-east-1|new-api-account-b",
+			ChannelOtherSettings: dto.ChannelOtherSettings{
+				AwsKeyType: dto.AwsKeyTypeRoleArn,
+			},
+		},
+	}
+
+	requestURL, err := adaptor.GetRequestURL(info)
+	require.NoError(t, err)
+	require.Empty(t, requestURL)
+	require.Equal(t, ClientModeRoleArn, adaptor.ClientMode)
+}
+
+func TestSplitAwsSecretTrimsParts(t *testing.T) {
+	t.Parallel()
+
+	parts := splitAwsSecret(" arn:aws:iam::765009073093:role/BedrockInvokeRole | us-east-1 | new-api-account-b ")
+	require.Equal(t, []string{
+		"arn:aws:iam::765009073093:role/BedrockInvokeRole",
+		"us-east-1",
+		"new-api-account-b",
+	}, parts)
 }

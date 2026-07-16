@@ -29,8 +29,9 @@ const (
 type AwsKeyType string
 
 const (
-	AwsKeyTypeAKSK   AwsKeyType = "ak_sk" // 默认
-	AwsKeyTypeApiKey AwsKeyType = "api_key"
+	AwsKeyTypeAKSK    AwsKeyType = "ak_sk" // 默认
+	AwsKeyTypeApiKey  AwsKeyType = "api_key"
+	AwsKeyTypeRoleArn AwsKeyType = "role_arn"
 )
 
 type ChannelOtherSettings struct {

@@ -2,7 +2,6 @@ package aws
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,18 +15,22 @@ import (
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relay/helper"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/QuantumNous/new-api/types"
 
-	"github.com/gin-gonic/gin"
-	"github.com/pkg/errors"
-
-	"github.com/QuantumNous/new-api/setting/model_setting"
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	bedrockruntimeTypes "github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/smithy-go/auth/bearer"
+	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
 )
+
+const defaultAwsRoleSessionName = "new-api"
 
 // getAwsErrorStatusCode extracts HTTP status code from AWS SDK error
 func getAwsErrorStatusCode(err error) int {
@@ -61,10 +64,13 @@ func newAwsClient(c *gin.Context, info *relaycommon.RelayInfo) (*bedrockruntime.
 		httpClient = service.GetHttpClient()
 	}
 
-	awsSecret := strings.Split(info.ApiKey, "|")
+	awsSecret := splitAwsSecret(info.ApiKey)
 	var client *bedrockruntime.Client
-	switch len(awsSecret) {
-	case 2:
+	switch info.ChannelOtherSettings.AwsKeyType {
+	case dto.AwsKeyTypeApiKey:
+		if len(awsSecret) != 2 {
+			return nil, errors.New("invalid aws api key, should be in format of <api-key>|<region>")
+		}
 		apiKey := awsSecret[0]
 		region := awsSecret[1]
 		client = bedrockruntime.New(bedrockruntime.Options{
@@ -72,7 +78,25 @@ func newAwsClient(c *gin.Context, info *relaycommon.RelayInfo) (*bedrockruntime.
 			BearerAuthTokenProvider: bearer.StaticTokenProvider{Token: bearer.Token{Value: apiKey}},
 			HTTPClient:              httpClient,
 		})
-	case 3:
+	case dto.AwsKeyTypeRoleArn:
+		client, err = newAwsAssumeRoleClient(httpClient, awsSecret)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		if len(awsSecret) == 2 {
+			apiKey := awsSecret[0]
+			region := awsSecret[1]
+			client = bedrockruntime.New(bedrockruntime.Options{
+				Region:                  region,
+				BearerAuthTokenProvider: bearer.StaticTokenProvider{Token: bearer.Token{Value: apiKey}},
+				HTTPClient:              httpClient,
+			})
+			return client, nil
+		}
+		if len(awsSecret) != 3 {
+			return nil, errors.New("invalid aws secret key")
+		}
 		ak := awsSecret[0]
 		sk := awsSecret[1]
 		region := awsSecret[2]
@@ -81,11 +105,53 @@ func newAwsClient(c *gin.Context, info *relaycommon.RelayInfo) (*bedrockruntime.
 			Credentials: aws.NewCredentialsCache(credentials.NewStaticCredentialsProvider(ak, sk, "")),
 			HTTPClient:  httpClient,
 		})
-	default:
-		return nil, errors.New("invalid aws secret key")
 	}
 
 	return client, nil
+}
+
+func splitAwsSecret(apiKey string) []string {
+	rawParts := strings.Split(apiKey, "|")
+	parts := make([]string, 0, len(rawParts))
+	for _, part := range rawParts {
+		parts = append(parts, strings.TrimSpace(part))
+	}
+	return parts
+}
+
+func newAwsAssumeRoleClient(httpClient *http.Client, awsSecret []string) (*bedrockruntime.Client, error) {
+	if len(awsSecret) != 2 && len(awsSecret) != 3 {
+		return nil, errors.New("invalid aws role arn key, should be in format of <role-arn>|<region>|<role-session-name>")
+	}
+	roleArn := awsSecret[0]
+	region := awsSecret[1]
+	roleSessionName := defaultAwsRoleSessionName
+	if len(awsSecret) == 3 && awsSecret[2] != "" {
+		roleSessionName = awsSecret[2]
+	}
+	if roleArn == "" || region == "" {
+		return nil, errors.New("invalid aws role arn key, role arn and region are required")
+	}
+
+	cfg, err := config.LoadDefaultConfig(
+		context.Background(),
+		config.WithRegion(region),
+		config.WithHTTPClient(httpClient),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("load aws default config failed: %w", err)
+	}
+
+	stsClient := sts.NewFromConfig(cfg)
+	provider := stscreds.NewAssumeRoleProvider(
+		stsClient,
+		roleArn,
+		func(o *stscreds.AssumeRoleOptions) {
+			o.RoleSessionName = roleSessionName
+		},
+	)
+	cfg.Credentials = aws.NewCredentialsCache(provider)
+	return bedrockruntime.NewFromConfig(cfg), nil
 }
 
 func doAwsClientRequest(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor, requestBody io.Reader) (any, error) {
@@ -321,7 +387,7 @@ func handleNovaRequest(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor) 
 		} `json:"usage"`
 	}
 
-	if err := json.Unmarshal(awsResp.Body, &novaResp); err != nil {
+	if err := common.Unmarshal(awsResp.Body, &novaResp); err != nil {
 		return types.NewError(errors.Wrap(err, "unmarshal nova response"), types.ErrorCodeBadResponseBody), nil
 	}
 
