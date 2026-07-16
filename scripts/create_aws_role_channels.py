@@ -68,6 +68,11 @@ AWS_GLOBAL_CLAUDE_MODEL_MAPPINGS = [
 ]
 
 
+class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def unique_csv(values: list[str]) -> str:
     seen = set()
     items = []
@@ -202,8 +207,18 @@ def post_channel(
         method="POST",
         headers=headers,
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        data = response.read().decode("utf-8")
+    opener = urllib.request.build_opener(NoRedirectHandler)
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            data = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        if exc.code in {301, 302, 303, 307, 308}:
+            location = exc.headers.get("Location", "")
+            raise RuntimeError(
+                f"request was redirected to {location}; use the final base URL, "
+                "for example --base-url https://api.example.com"
+            ) from exc
+        raise
     return json.loads(data)
 
 
@@ -271,14 +286,14 @@ def main() -> int:
         channel = payload["channel"]
         try:
             result = post_channel(args.base_url, auth_headers, payload, args.timeout)
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
             failed += 1
             print(f"[FAIL] {channel['name']}: {exc}", file=sys.stderr)
             if not args.continue_on_error:
                 return 1
             continue
 
-        if result.get("success"):
+        if result.get("success") and "data" not in result:
             ok += 1
             print(f"[OK] {channel['name']}")
             continue
