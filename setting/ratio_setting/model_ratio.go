@@ -135,6 +135,7 @@ var defaultModelRatio = map[string]float64{
 	"claude-3-7-sonnet-20250219-thinking":       1.5,
 	"claude-sonnet-4-20250514":                  1.5,
 	"claude-sonnet-4-5-20250929":                1.5,
+	"claude-sonnet-4-6":                         1.5,
 	"claude-opus-4-5-20251101":                  2.5,
 	"claude-opus-4-6":                           2.5,
 	"claude-opus-4-6-max":                       2.5,
@@ -156,6 +157,25 @@ var defaultModelRatio = map[string]float64{
 	"claude-3-opus-20240229":                    7.5, // $15 / 1M tokens
 	"claude-opus-4-20250514":                    7.5,
 	"claude-opus-4-1-20250805":                  7.5,
+	// AWS Bedrock global Anthropic model IDs. Ratios follow AWS Bedrock
+	// Foundation Models On-Demand input-token USD price divided by 2.
+	"global.anthropic.claude-3-sonnet-20240229-v1:0":     1.5,   // $3 / 1M input tokens
+	"global.anthropic.claude-3-opus-20240229-v1:0":       7.5,   // $15 / 1M input tokens
+	"global.anthropic.claude-3-haiku-20240307-v1:0":      0.125, // $0.25 / 1M input tokens
+	"global.anthropic.claude-3-5-sonnet-20240620-v1:0":   1.5,   // $3 / 1M input tokens
+	"global.anthropic.claude-3-5-sonnet-20241022-v2:0":   1.5,   // $3 / 1M input tokens
+	"global.anthropic.claude-3-5-haiku-20241022-v1:0":    0.4,   // $0.80 / 1M input tokens
+	"global.anthropic.claude-3-7-sonnet-20250219-v1:0":   1.5,   // $3 / 1M input tokens
+	"global.anthropic.claude-sonnet-4-20250514-v1:0":     1.5,   // $3 / 1M input tokens
+	"global.anthropic.claude-opus-4-20250514-v1:0":       7.5,   // $15 / 1M input tokens
+	"global.anthropic.claude-opus-4-1-20250805-v1:0":     7.5,   // $15 / 1M input tokens
+	"global.anthropic.claude-sonnet-4-5-20250929-v1:0":   1.5,   // $3 / 1M input tokens
+	"global.anthropic.claude-sonnet-4-6":                 1.5,   // $3 / 1M input tokens
+	"global.anthropic.claude-haiku-4-5-20251001-v1:0":    0.5,   // $1 / 1M input tokens
+	"global.anthropic.claude-opus-4-5-20251101-v1:0":     2.5,   // $5 / 1M input tokens
+	"global.anthropic.claude-opus-4-6-v1":                2.5,   // $5 / 1M input tokens
+	"global.anthropic.claude-opus-4-7":                   2.5,   // $5 / 1M input tokens
+	"global.anthropic.claude-opus-4-8":                   2.5,   // $5 / 1M input tokens
 	"ERNIE-4.0-8K":                              0.120 * RMB,
 	"ERNIE-3.5-8K":                              0.012 * RMB,
 	"ERNIE-3.5-8K-0205":                         0.024 * RMB,
