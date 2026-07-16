@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -200,27 +201,43 @@ def post_channel(
     headers: dict[str, str],
     payload: dict[str, Any],
     timeout: int,
+    retries: int = 0,
+    retry_delay: float = 3.0,
 ) -> dict[str, Any]:
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-    request = urllib.request.Request(
-        f"{base_url.rstrip('/')}/api/channel/",
-        data=body,
-        method="POST",
-        headers=headers,
-    )
+    url = f"{base_url.rstrip('/')}/api/channel/"
     opener = urllib.request.build_opener(NoRedirectHandler)
+    for attempt in range(retries + 1):
+        request = urllib.request.Request(
+            url,
+            data=body,
+            method="POST",
+            headers=headers,
+        )
+        try:
+            with opener.open(request, timeout=timeout) as response:
+                data = response.read().decode("utf-8")
+            return json.loads(data)
+        except urllib.error.HTTPError as exc:
+            if exc.code in {301, 302, 303, 307, 308}:
+                location = exc.headers.get("Location", "")
+                raise RuntimeError(
+                    f"request was redirected to {location}; use the final base URL, "
+                    "for example --base-url https://api.example.com"
+                ) from exc
+            if exc.code == 429 and attempt < retries:
+                time.sleep(resolve_retry_delay(exc, retry_delay))
+                continue
+            raise
+    raise RuntimeError("request retry loop exited unexpectedly")
+
+
+def resolve_retry_delay(exc: urllib.error.HTTPError, fallback: float) -> float:
+    retry_after = exc.headers.get("Retry-After")
     try:
-        with opener.open(request, timeout=timeout) as response:
-            data = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        if exc.code in {301, 302, 303, 307, 308}:
-            location = exc.headers.get("Location", "")
-            raise RuntimeError(
-                f"request was redirected to {location}; use the final base URL, "
-                "for example --base-url https://api.example.com"
-            ) from exc
-        raise
-    return json.loads(data)
+        return float(retry_after) if retry_after else fallback
+    except ValueError:
+        return fallback
 
 
 def request_json(
@@ -229,24 +246,28 @@ def request_json(
     headers: dict[str, str],
     timeout: int,
     method: str = "GET",
+    retries: int = 0,
+    retry_delay: float = 3.0,
 ) -> dict[str, Any]:
-    request = urllib.request.Request(
-        f"{base_url.rstrip('/')}{path}",
-        method=method,
-        headers=headers,
-    )
+    url = f"{base_url.rstrip('/')}{path}"
     opener = urllib.request.build_opener(NoRedirectHandler)
-    try:
-        with opener.open(request, timeout=timeout) as response:
-            data = response.read().decode("utf-8")
-    except urllib.error.HTTPError as exc:
-        if exc.code in {301, 302, 303, 307, 308}:
-            location = exc.headers.get("Location", "")
-            raise RuntimeError(
-                f"request was redirected to {location}; use the final base URL"
-            ) from exc
-        raise
-    return json.loads(data)
+    for attempt in range(retries + 1):
+        request = urllib.request.Request(url, method=method, headers=headers)
+        try:
+            with opener.open(request, timeout=timeout) as response:
+                data = response.read().decode("utf-8")
+            return json.loads(data)
+        except urllib.error.HTTPError as exc:
+            if exc.code in {301, 302, 303, 307, 308}:
+                location = exc.headers.get("Location", "")
+                raise RuntimeError(
+                    f"request was redirected to {location}; use the final base URL"
+                ) from exc
+            if exc.code == 429 and attempt < retries:
+                time.sleep(resolve_retry_delay(exc, retry_delay))
+                continue
+            raise
+    raise RuntimeError("request retry loop exited unexpectedly")
 
 
 def find_channel_id(
@@ -254,6 +275,8 @@ def find_channel_id(
     headers: dict[str, str],
     timeout: int,
     name: str,
+    retries: int = 0,
+    retry_delay: float = 3.0,
 ) -> int | None:
     query = urllib.parse.urlencode(
         {
@@ -263,7 +286,14 @@ def find_channel_id(
             "id_sort": "true",
         }
     )
-    result = request_json(base_url, f"/api/channel/search?{query}", headers, timeout)
+    result = request_json(
+        base_url,
+        f"/api/channel/search?{query}",
+        headers,
+        timeout,
+        retries=retries,
+        retry_delay=retry_delay,
+    )
     if not result.get("success"):
         raise RuntimeError(result.get("message") or result)
 
@@ -281,6 +311,8 @@ def find_channel_ids(
     headers: dict[str, str],
     timeout: int,
     name: str,
+    retries: int = 0,
+    retry_delay: float = 3.0,
 ) -> list[int]:
     query = urllib.parse.urlencode(
         {
@@ -290,7 +322,14 @@ def find_channel_ids(
             "id_sort": "true",
         }
     )
-    result = request_json(base_url, f"/api/channel/search?{query}", headers, timeout)
+    result = request_json(
+        base_url,
+        f"/api/channel/search?{query}",
+        headers,
+        timeout,
+        retries=retries,
+        retry_delay=retry_delay,
+    )
     if not result.get("success"):
         raise RuntimeError(result.get("message") or result)
 
@@ -308,6 +347,8 @@ def test_channel(
     timeout: int,
     channel_id: int,
     test_model: str,
+    retries: int = 0,
+    retry_delay: float = 3.0,
 ) -> dict[str, Any]:
     params = {}
     if test_model:
@@ -319,6 +360,8 @@ def test_channel(
         f"/api/channel/test/{channel_id}{suffix}",
         headers,
         timeout,
+        retries=retries,
+        retry_delay=retry_delay,
     )
 
 
@@ -327,6 +370,8 @@ def delete_channel(
     headers: dict[str, str],
     timeout: int,
     channel_id: int,
+    retries: int = 0,
+    retry_delay: float = 3.0,
 ) -> dict[str, Any]:
     return request_json(
         base_url,
@@ -334,6 +379,8 @@ def delete_channel(
         headers,
         timeout,
         method="DELETE",
+        retries=retries,
+        retry_delay=retry_delay,
     )
 
 
@@ -357,6 +404,8 @@ def test_and_maybe_delete_channel(
         args.timeout,
         channel_id,
         args.test_model,
+        retries=args.retries,
+        retry_delay=args.retry_delay,
     )
     if test_result.get("success"):
         response_time = test_result.get("time")
@@ -374,6 +423,8 @@ def test_and_maybe_delete_channel(
             headers,
             args.timeout,
             channel_id,
+            retries=args.retries,
+            retry_delay=args.retry_delay,
         )
         deleted = " deleted" if delete_result.get("success") else " delete_failed"
     return False, f"test failed: {error}{deleted}"
@@ -407,6 +458,9 @@ def main() -> int:
     parser.add_argument("--keep-on-test-failure", action="store_true")
     parser.add_argument("--allow-duplicate", action="store_true")
     parser.add_argument("--timeout", type=int, default=30)
+    parser.add_argument("--retries", type=int, default=3)
+    parser.add_argument("--retry-delay", type=float, default=5.0)
+    parser.add_argument("--request-delay", type=float, default=1.0)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--continue-on-error", action="store_true")
     args = parser.parse_args()
@@ -442,7 +496,9 @@ def main() -> int:
     ok = 0
     failed = 0
     auth_headers = build_auth_headers(args)
-    for payload in payloads:
+    for index, payload in enumerate(payloads):
+        if index > 0 and args.request_delay > 0:
+            time.sleep(args.request_delay)
         channel = payload["channel"]
         if not args.allow_duplicate:
             try:
@@ -451,6 +507,8 @@ def main() -> int:
                     auth_headers,
                     args.timeout,
                     channel["name"],
+                    retries=args.retries,
+                    retry_delay=args.retry_delay,
                 )
             except (
                 urllib.error.URLError,
@@ -497,7 +555,14 @@ def main() -> int:
                 continue
 
         try:
-            result = post_channel(args.base_url, auth_headers, payload, args.timeout)
+            result = post_channel(
+                args.base_url,
+                auth_headers,
+                payload,
+                args.timeout,
+                retries=args.retries,
+                retry_delay=args.retry_delay,
+            )
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
             failed += 1
             print(f"[FAIL] {channel['name']}: {exc}", file=sys.stderr)
@@ -518,6 +583,8 @@ def main() -> int:
                     auth_headers,
                     args.timeout,
                     channel["name"],
+                    retries=args.retries,
+                    retry_delay=args.retry_delay,
                 )
                 if channel_id is None:
                     raise RuntimeError("created channel was not found by name")
@@ -553,6 +620,8 @@ def main() -> int:
                             auth_headers,
                             args.timeout,
                             channel_id,
+                            retries=args.retries,
+                            retry_delay=args.retry_delay,
                         )
                         deleted = " deleted" if delete_result.get("success") else " delete_failed"
                     except (
