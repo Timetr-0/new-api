@@ -276,6 +276,32 @@ def find_channel_id(
     return None
 
 
+def find_channel_ids(
+    base_url: str,
+    headers: dict[str, str],
+    timeout: int,
+    name: str,
+) -> list[int]:
+    query = urllib.parse.urlencode(
+        {
+            "keyword": name,
+            "type": 33,
+            "page_size": 50,
+            "id_sort": "true",
+        }
+    )
+    result = request_json(base_url, f"/api/channel/search?{query}", headers, timeout)
+    if not result.get("success"):
+        raise RuntimeError(result.get("message") or result)
+
+    ids = []
+    items = result.get("data", {}).get("items", [])
+    for item in items:
+        if item.get("name") == name and isinstance(item.get("id"), int):
+            ids.append(item["id"])
+    return ids
+
+
 def test_channel(
     base_url: str,
     headers: dict[str, str],
@@ -345,6 +371,7 @@ def main() -> int:
     parser.add_argument("--test-model", default="")
     parser.add_argument("--test-after-create", action="store_true")
     parser.add_argument("--keep-on-test-failure", action="store_true")
+    parser.add_argument("--allow-duplicate", action="store_true")
     parser.add_argument("--timeout", type=int, default=30)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--continue-on-error", action="store_true")
@@ -383,6 +410,29 @@ def main() -> int:
     auth_headers = build_auth_headers(args)
     for payload in payloads:
         channel = payload["channel"]
+        if not args.allow_duplicate:
+            try:
+                existing_ids = find_channel_ids(
+                    args.base_url,
+                    auth_headers,
+                    args.timeout,
+                    channel["name"],
+                )
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                json.JSONDecodeError,
+                RuntimeError,
+            ) as exc:
+                failed += 1
+                print(f"[FAIL] {channel['name']}: duplicate check failed: {exc}", file=sys.stderr)
+                if not args.continue_on_error:
+                    return 1
+                continue
+            if existing_ids:
+                print(f"[SKIP] {channel['name']} already exists id={existing_ids[0]}")
+                continue
+
         try:
             result = post_channel(args.base_url, auth_headers, payload, args.timeout)
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError) as exc:
