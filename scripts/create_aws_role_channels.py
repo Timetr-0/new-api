@@ -345,6 +345,38 @@ def format_test_failure(result: dict[str, Any]) -> str:
     return str(message)
 
 
+def test_and_maybe_delete_channel(
+    args: argparse.Namespace,
+    headers: dict[str, str],
+    channel_name: str,
+    channel_id: int,
+) -> tuple[bool, str]:
+    test_result = test_channel(
+        args.base_url,
+        headers,
+        args.timeout,
+        channel_id,
+        args.test_model,
+    )
+    if test_result.get("success"):
+        response_time = test_result.get("time")
+        if isinstance(response_time, (int, float)):
+            return True, f"test={response_time:.2f}s"
+        return True, "test=passed"
+
+    error = format_test_failure(test_result)
+    deleted = ""
+    if not args.keep_on_test_failure:
+        delete_result = delete_channel(
+            args.base_url,
+            headers,
+            args.timeout,
+            channel_id,
+        )
+        deleted = " deleted" if delete_result.get("success") else " delete_failed"
+    return False, f"test failed: {error}{deleted}"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Create AWS Role ARN channels under one New API group.",
@@ -430,7 +462,36 @@ def main() -> int:
                     return 1
                 continue
             if existing_ids:
-                print(f"[SKIP] {channel['name']} already exists id={existing_ids[0]}")
+                if not args.test_after_create:
+                    print(f"[SKIP] {channel['name']} already exists id={existing_ids[0]}")
+                    continue
+
+                try:
+                    test_ok, detail = test_and_maybe_delete_channel(
+                        args,
+                        auth_headers,
+                        channel["name"],
+                        existing_ids[0],
+                    )
+                except (
+                    urllib.error.URLError,
+                    TimeoutError,
+                    json.JSONDecodeError,
+                    RuntimeError,
+                ) as exc:
+                    failed += 1
+                    print(f"[FAIL] {channel['name']} existing id={existing_ids[0]}: test/delete error: {exc}", file=sys.stderr)
+                    if not args.continue_on_error:
+                        return 1
+                    continue
+
+                if test_ok:
+                    print(f"[SKIP] {channel['name']} already exists id={existing_ids[0]} {detail}")
+                else:
+                    failed += 1
+                    print(f"[FAIL] {channel['name']} existing id={existing_ids[0]}: {detail}", file=sys.stderr)
+                    if not args.continue_on_error:
+                        return 1
                 continue
 
         try:
@@ -459,37 +520,19 @@ def main() -> int:
                 if channel_id is None:
                     raise RuntimeError("created channel was not found by name")
 
-                test_result = test_channel(
-                    args.base_url,
+                test_ok, detail = test_and_maybe_delete_channel(
+                    args,
                     auth_headers,
-                    args.timeout,
+                    channel["name"],
                     channel_id,
-                    args.test_model,
                 )
-                if test_result.get("success"):
+                if test_ok:
                     ok += 1
-                    response_time = test_result.get("time")
-                    if isinstance(response_time, (int, float)):
-                        print(f"[OK] {channel['name']} test={response_time:.2f}s")
-                    else:
-                        print(f"[OK] {channel['name']} test=passed")
+                    print(f"[OK] {channel['name']} {detail}")
                     continue
 
                 failed += 1
-                error = format_test_failure(test_result)
-                deleted = ""
-                if not args.keep_on_test_failure:
-                    delete_result = delete_channel(
-                        args.base_url,
-                        auth_headers,
-                        args.timeout,
-                        channel_id,
-                    )
-                    deleted = " deleted" if delete_result.get("success") else " delete_failed"
-                print(
-                    f"[FAIL] {channel['name']}: test failed: {error}{deleted}",
-                    file=sys.stderr,
-                )
+                print(f"[FAIL] {channel['name']}: {detail}", file=sys.stderr)
                 if not args.continue_on_error:
                     return 1
                 continue
