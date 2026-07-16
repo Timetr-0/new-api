@@ -414,7 +414,15 @@ def test_and_maybe_delete_channel(
         return True, "test=passed"
 
     error = format_test_failure(test_result)
-    if test_result.get("error_code") == "model_price_error":
+    keep_error_tokens = [
+        "InvalidClientTokenId",
+        "failed to refresh cached credentials",
+        "STS: AssumeRole",
+        "get identity",
+    ]
+    if test_result.get("error_code") == "model_price_error" or any(
+        token in error for token in keep_error_tokens
+    ):
         return False, f"test failed: {error} kept"
     deleted = ""
     if not args.keep_on_test_failure:

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 )
 
 const defaultAwsRoleSessionName = "new-api"
+const defaultAwsAssumeRoleSTSRegion = "us-east-1"
 
 // getAwsErrorStatusCode extracts HTTP status code from AWS SDK error
 func getAwsErrorStatusCode(err error) int {
@@ -142,7 +144,13 @@ func newAwsAssumeRoleClient(httpClient *http.Client, awsSecret []string) (*bedro
 		return nil, fmt.Errorf("load aws default config failed: %w", err)
 	}
 
-	stsClient := sts.NewFromConfig(cfg)
+	stsRegion := strings.TrimSpace(os.Getenv("AWS_ASSUME_ROLE_STS_REGION"))
+	if stsRegion == "" {
+		stsRegion = defaultAwsAssumeRoleSTSRegion
+	}
+	stsCfg := cfg.Copy()
+	stsCfg.Region = stsRegion
+	stsClient := sts.NewFromConfig(stsCfg)
 	provider := stscreds.NewAssumeRoleProvider(
 		stsClient,
 		roleArn,
