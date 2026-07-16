@@ -202,7 +202,7 @@ def post_channel(
 ) -> dict[str, Any]:
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     request = urllib.request.Request(
-        f"{base_url.rstrip('/')}/api/channel",
+        f"{base_url.rstrip('/')}/api/channel/",
         data=body,
         method="POST",
         headers=headers,
