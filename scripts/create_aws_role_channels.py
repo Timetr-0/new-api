@@ -8,6 +8,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -222,6 +223,102 @@ def post_channel(
     return json.loads(data)
 
 
+def request_json(
+    base_url: str,
+    path: str,
+    headers: dict[str, str],
+    timeout: int,
+    method: str = "GET",
+) -> dict[str, Any]:
+    request = urllib.request.Request(
+        f"{base_url.rstrip('/')}{path}",
+        method=method,
+        headers=headers,
+    )
+    opener = urllib.request.build_opener(NoRedirectHandler)
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            data = response.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        if exc.code in {301, 302, 303, 307, 308}:
+            location = exc.headers.get("Location", "")
+            raise RuntimeError(
+                f"request was redirected to {location}; use the final base URL"
+            ) from exc
+        raise
+    return json.loads(data)
+
+
+def find_channel_id(
+    base_url: str,
+    headers: dict[str, str],
+    timeout: int,
+    name: str,
+) -> int | None:
+    query = urllib.parse.urlencode(
+        {
+            "keyword": name,
+            "type": 33,
+            "page_size": 50,
+            "id_sort": "true",
+        }
+    )
+    result = request_json(base_url, f"/api/channel/search?{query}", headers, timeout)
+    if not result.get("success"):
+        raise RuntimeError(result.get("message") or result)
+
+    items = result.get("data", {}).get("items", [])
+    for item in items:
+        if item.get("name") == name:
+            channel_id = item.get("id")
+            if isinstance(channel_id, int):
+                return channel_id
+    return None
+
+
+def test_channel(
+    base_url: str,
+    headers: dict[str, str],
+    timeout: int,
+    channel_id: int,
+    test_model: str,
+) -> dict[str, Any]:
+    params = {}
+    if test_model:
+        params["model"] = test_model
+    query = urllib.parse.urlencode(params)
+    suffix = f"?{query}" if query else ""
+    return request_json(
+        base_url,
+        f"/api/channel/test/{channel_id}{suffix}",
+        headers,
+        timeout,
+    )
+
+
+def delete_channel(
+    base_url: str,
+    headers: dict[str, str],
+    timeout: int,
+    channel_id: int,
+) -> dict[str, Any]:
+    return request_json(
+        base_url,
+        f"/api/channel/{channel_id}",
+        headers,
+        timeout,
+        method="DELETE",
+    )
+
+
+def format_test_failure(result: dict[str, Any]) -> str:
+    message = result.get("message") or result.get("error") or str(result)
+    error_code = result.get("error_code")
+    if error_code:
+        return f"{message} ({error_code})"
+    return str(message)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Create AWS Role ARN channels under one New API group.",
@@ -246,6 +343,8 @@ def main() -> int:
     parser.add_argument("--tag", default="")
     parser.add_argument("--remark", default="Created by scripts/create_aws_role_channels.py")
     parser.add_argument("--test-model", default="")
+    parser.add_argument("--test-after-create", action="store_true")
+    parser.add_argument("--keep-on-test-failure", action="store_true")
     parser.add_argument("--timeout", type=int, default=30)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--continue-on-error", action="store_true")
@@ -294,9 +393,86 @@ def main() -> int:
             continue
 
         if result.get("success") and "data" not in result:
-            ok += 1
-            print(f"[OK] {channel['name']}")
-            continue
+            if not args.test_after_create:
+                ok += 1
+                print(f"[OK] {channel['name']}")
+                continue
+
+            channel_id = None
+            try:
+                channel_id = find_channel_id(
+                    args.base_url,
+                    auth_headers,
+                    args.timeout,
+                    channel["name"],
+                )
+                if channel_id is None:
+                    raise RuntimeError("created channel was not found by name")
+
+                test_result = test_channel(
+                    args.base_url,
+                    auth_headers,
+                    args.timeout,
+                    channel_id,
+                    args.test_model,
+                )
+                if test_result.get("success"):
+                    ok += 1
+                    response_time = test_result.get("time")
+                    if isinstance(response_time, (int, float)):
+                        print(f"[OK] {channel['name']} test={response_time:.2f}s")
+                    else:
+                        print(f"[OK] {channel['name']} test=passed")
+                    continue
+
+                failed += 1
+                error = format_test_failure(test_result)
+                deleted = ""
+                if not args.keep_on_test_failure:
+                    delete_result = delete_channel(
+                        args.base_url,
+                        auth_headers,
+                        args.timeout,
+                        channel_id,
+                    )
+                    deleted = " deleted" if delete_result.get("success") else " delete_failed"
+                print(
+                    f"[FAIL] {channel['name']}: test failed: {error}{deleted}",
+                    file=sys.stderr,
+                )
+                if not args.continue_on_error:
+                    return 1
+                continue
+            except (
+                urllib.error.URLError,
+                TimeoutError,
+                json.JSONDecodeError,
+                RuntimeError,
+            ) as exc:
+                failed += 1
+                deleted = ""
+                if channel_id is not None and not args.keep_on_test_failure:
+                    try:
+                        delete_result = delete_channel(
+                            args.base_url,
+                            auth_headers,
+                            args.timeout,
+                            channel_id,
+                        )
+                        deleted = " deleted" if delete_result.get("success") else " delete_failed"
+                    except (
+                        urllib.error.URLError,
+                        TimeoutError,
+                        json.JSONDecodeError,
+                        RuntimeError,
+                    ) as delete_exc:
+                        deleted = f" delete_error={delete_exc}"
+                print(f"[FAIL] {channel['name']}: test/delete error: {exc}", file=sys.stderr)
+                if deleted:
+                    print(f"[INFO] {channel['name']} cleanup:{deleted}", file=sys.stderr)
+                if not args.continue_on_error:
+                    return 1
+                continue
 
         failed += 1
         print(
