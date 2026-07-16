@@ -372,6 +372,17 @@ export const FIELD_DESCRIPTIONS = {
   OPENAI_ORG: 'OpenAI Organization ID (optional)',
 } as const
 
+export const AWS_GLOBAL_CLAUDE_OPUS_46_MODELS = [
+  'claude-opus-4-6',
+  'claude-opus-4-6-v1',
+  'global.anthropic.claude-opus-4-6-v1',
+]
+
+export const AWS_GLOBAL_CLAUDE_OPUS_46_MAPPING = {
+  'claude-opus-4-6': 'global.anthropic.claude-opus-4-6-v1',
+  'claude-opus-4-6-v1': 'global.anthropic.claude-opus-4-6-v1',
+} as const
+
 // ============================================================================
 // Channel Type Specific Configurations
 // ============================================================================
