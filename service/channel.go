@@ -49,6 +49,9 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 	if err == nil {
 		return false
 	}
+	if shouldDisableBedrockDailyTokenThrottle(err) {
+		return true
+	}
 	if types.IsChannelError(err) {
 		return true
 	}
@@ -62,6 +65,15 @@ func ShouldDisableChannel(err *types.NewAPIError) bool {
 	lowerMessage := strings.ToLower(err.Error())
 	search, _ := AcSearch(lowerMessage, operation_setting.AutomaticDisableKeywords, true)
 	return search
+}
+
+func shouldDisableBedrockDailyTokenThrottle(err *types.NewAPIError) bool {
+	if err.StatusCode != 429 {
+		return false
+	}
+	lowerMessage := strings.ToLower(err.Error())
+	return strings.Contains(lowerMessage, "throttlingexception") &&
+		strings.Contains(lowerMessage, "too many tokens per day")
 }
 
 func ShouldEnableChannel(newAPIError *types.NewAPIError, status int) bool {

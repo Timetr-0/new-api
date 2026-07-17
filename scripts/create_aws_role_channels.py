@@ -69,6 +69,8 @@ AWS_GLOBAL_CLAUDE_MODEL_MAPPINGS = [
     ("claude-opus-4-8", "global.anthropic.claude-opus-4-8"),
 ]
 
+CHANNEL_STATUS_ENABLED = 1
+
 
 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -275,17 +277,19 @@ def find_channel_id(
     headers: dict[str, str],
     timeout: int,
     name: str,
+    group: str,
     retries: int = 0,
     retry_delay: float = 3.0,
 ) -> int | None:
-    query = urllib.parse.urlencode(
-        {
-            "keyword": name,
-            "type": 33,
-            "page_size": 50,
-            "id_sort": "true",
-        }
-    )
+    query_params = {
+        "keyword": name,
+        "type": 33,
+        "page_size": 50,
+        "id_sort": "true",
+    }
+    if group:
+        query_params["group"] = group
+    query = urllib.parse.urlencode(query_params)
     result = request_json(
         base_url,
         f"/api/channel/search?{query}",
@@ -299,29 +303,31 @@ def find_channel_id(
 
     items = result.get("data", {}).get("items", [])
     for item in items:
-        if item.get("name") == name:
+        if item.get("name") == name and item.get("group") == group:
             channel_id = item.get("id")
             if isinstance(channel_id, int):
                 return channel_id
     return None
 
 
-def find_channel_ids(
+def find_channel_records(
     base_url: str,
     headers: dict[str, str],
     timeout: int,
     name: str,
+    group: str,
     retries: int = 0,
     retry_delay: float = 3.0,
-) -> list[int]:
-    query = urllib.parse.urlencode(
-        {
-            "keyword": name,
-            "type": 33,
-            "page_size": 50,
-            "id_sort": "true",
-        }
-    )
+) -> list[dict[str, Any]]:
+    query_params = {
+        "keyword": name,
+        "type": 33,
+        "page_size": 50,
+        "id_sort": "true",
+    }
+    if group:
+        query_params["group"] = group
+    query = urllib.parse.urlencode(query_params)
     result = request_json(
         base_url,
         f"/api/channel/search?{query}",
@@ -333,12 +339,43 @@ def find_channel_ids(
     if not result.get("success"):
         raise RuntimeError(result.get("message") or result)
 
-    ids = []
+    records = []
     items = result.get("data", {}).get("items", [])
     for item in items:
-        if item.get("name") == name and isinstance(item.get("id"), int):
-            ids.append(item["id"])
-    return ids
+        if (
+            item.get("name") == name
+            and item.get("group") == group
+            and isinstance(item.get("id"), int)
+        ):
+            records.append(
+                {
+                    "id": item["id"],
+                    "status": item.get("status"),
+                }
+            )
+    return records
+
+
+def get_channel_status(
+    base_url: str,
+    headers: dict[str, str],
+    timeout: int,
+    channel_id: int,
+    retries: int = 0,
+    retry_delay: float = 3.0,
+) -> int | None:
+    result = request_json(
+        base_url,
+        f"/api/channel/{channel_id}",
+        headers,
+        timeout,
+        retries=retries,
+        retry_delay=retry_delay,
+    )
+    if not result.get("success"):
+        raise RuntimeError(result.get("message") or result)
+    status = result.get("data", {}).get("status")
+    return status if isinstance(status, int) else None
 
 
 def test_channel(
@@ -414,6 +451,20 @@ def test_and_maybe_delete_channel(
         return True, "test=passed"
 
     error = format_test_failure(test_result)
+    try:
+        status = get_channel_status(
+            args.base_url,
+            headers,
+            args.timeout,
+            channel_id,
+            retries=args.retries,
+            retry_delay=args.retry_delay,
+        )
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, RuntimeError):
+        status = None
+    if status is not None and status != CHANNEL_STATUS_ENABLED:
+        return False, f"test failed: {error} kept disabled status={status}"
+
     keep_error_tokens = [
         "InvalidClientTokenId",
         "failed to refresh cached credentials",
@@ -450,8 +501,8 @@ def main() -> int:
     parser.add_argument("--group", required=True)
     parser.add_argument("--regions", help="Comma-separated region list. Defaults to known accessible regions.")
     parser.add_argument("--region-file", help="One region per line. Overrides --regions.")
-    parser.add_argument("--name-template", default="bedrock-{region}")
-    parser.add_argument("--session-name", default="new-api-{safe_region}")
+    parser.add_argument("--name-template", default="{region}")
+    parser.add_argument("--session-name", default="{safe_region}")
     parser.add_argument("--preset", choices=["aws-global-claude", "none"], default="aws-global-claude")
     parser.add_argument("--models", help="Comma-separated model list. Overrides preset models.")
     parser.add_argument("--model-mapping", help="JSON object string. Overrides preset mapping.")
@@ -510,11 +561,12 @@ def main() -> int:
         channel = payload["channel"]
         if not args.allow_duplicate:
             try:
-                existing_ids = find_channel_ids(
+                existing_channels = find_channel_records(
                     args.base_url,
                     auth_headers,
                     args.timeout,
                     channel["name"],
+                    channel["group"],
                     retries=args.retries,
                     retry_delay=args.retry_delay,
                 )
@@ -529,9 +581,25 @@ def main() -> int:
                 if not args.continue_on_error:
                     return 1
                 continue
-            if existing_ids:
+            if existing_channels:
+                disabled_existing = next(
+                    (
+                        record
+                        for record in existing_channels
+                        if record.get("status") != CHANNEL_STATUS_ENABLED
+                    ),
+                    None,
+                )
+                if disabled_existing:
+                    print(
+                        f"[SKIP] {channel['name']} already exists id={disabled_existing['id']} "
+                        f"disabled status={disabled_existing.get('status')}"
+                    )
+                    continue
+
+                existing_id = existing_channels[0]["id"]
                 if not args.test_after_create:
-                    print(f"[SKIP] {channel['name']} already exists id={existing_ids[0]}")
+                    print(f"[SKIP] {channel['name']} already exists id={existing_id}")
                     continue
 
                 try:
@@ -539,7 +607,7 @@ def main() -> int:
                         args,
                         auth_headers,
                         channel["name"],
-                        existing_ids[0],
+                        existing_id,
                     )
                 except (
                     urllib.error.URLError,
@@ -548,16 +616,16 @@ def main() -> int:
                     RuntimeError,
                 ) as exc:
                     failed += 1
-                    print(f"[FAIL] {channel['name']} existing id={existing_ids[0]}: test/delete error: {exc}", file=sys.stderr)
+                    print(f"[FAIL] {channel['name']} existing id={existing_id}: test/delete error: {exc}", file=sys.stderr)
                     if not args.continue_on_error:
                         return 1
                     continue
 
                 if test_ok:
-                    print(f"[SKIP] {channel['name']} already exists id={existing_ids[0]} {detail}")
+                    print(f"[SKIP] {channel['name']} already exists id={existing_id} {detail}")
                 else:
                     failed += 1
-                    print(f"[FAIL] {channel['name']} existing id={existing_ids[0]}: {detail}", file=sys.stderr)
+                    print(f"[FAIL] {channel['name']} existing id={existing_id}: {detail}", file=sys.stderr)
                     if not args.continue_on_error:
                         return 1
                 continue
@@ -591,6 +659,7 @@ def main() -> int:
                     auth_headers,
                     args.timeout,
                     channel["name"],
+                    channel["group"],
                     retries=args.retries,
                     retry_delay=args.retry_delay,
                 )
