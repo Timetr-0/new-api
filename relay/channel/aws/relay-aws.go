@@ -305,6 +305,9 @@ func awsHandler(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor) (*types
 		statusCode := getAwsErrorStatusCode(err)
 		return types.NewOpenAIError(errors.Wrap(err, "InvokeModel"), types.ErrorCodeAwsInvokeError, statusCode), nil
 	}
+	if info.RelayFormat == types.RelayFormatOpenAIResponses {
+		return awsResponsesHandler(c, info, awsResp)
+	}
 
 	claudeInfo := &claude.ClaudeResponseInfo{
 		ResponseId:   helper.GetResponseID(c),
@@ -334,6 +337,9 @@ func awsStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor) (
 	if err != nil {
 		statusCode := getAwsErrorStatusCode(err)
 		return types.NewOpenAIError(errors.Wrap(err, "InvokeModelWithResponseStream"), types.ErrorCodeAwsInvokeError, statusCode), nil
+	}
+	if info.RelayFormat == types.RelayFormatOpenAIResponses {
+		return awsResponsesStreamHandler(c, info, awsResp)
 	}
 	stream := awsResp.GetStream()
 	defer stream.Close()

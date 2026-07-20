@@ -150,8 +150,16 @@ func (a *Adaptor) ConvertEmbeddingRequest(c *gin.Context, info *relaycommon.Rela
 }
 
 func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.OpenAIResponsesRequest) (any, error) {
-	// TODO implement me
-	return nil, errors.New("not implemented")
+	result, err := service.ConvertRequest(c, info, types.RelayFormatClaude, &request)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to convert openai responses request to claude request")
+	}
+	claudeReq, ok := result.Value.(*dto.ClaudeRequest)
+	if !ok {
+		return nil, fmt.Errorf("expected Anthropic Messages request, got %T", result.Value)
+	}
+	info.UpstreamModelName = claudeReq.Model
+	return a.ConvertClaudeRequest(c, info, claudeReq)
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
@@ -164,6 +172,12 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, request
 
 func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.NewAPIError) {
 	if a.ClientMode == ClientModeApiKey {
+		if info.RelayFormat == types.RelayFormatOpenAIResponses {
+			if info.IsStream {
+				return awsResponsesHTTPStreamHandler(c, info, resp)
+			}
+			return awsResponsesHTTPHandler(c, info, resp)
+		}
 		claudeAdaptor := claude.Adaptor{}
 		usage, err = claudeAdaptor.DoResponse(c, resp, info)
 	} else {
