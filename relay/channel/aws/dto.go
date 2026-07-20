@@ -73,6 +73,7 @@ func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaude
 		return nil, err
 	}
 	awsClaudeRequest.AnthropicVersion = "bedrock-2023-05-31"
+	awsClaudeRequest.ContextManagement = nil
 
 	// check header anthropic-beta
 	anthropicBetaValues := requestHeader.Get("anthropic-beta")
