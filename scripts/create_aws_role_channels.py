@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create AWS Bedrock Role ARN channels through the New API admin API."""
+"""Create AWS Bedrock channels through the New API admin API."""
 
 from __future__ import annotations
 
@@ -19,57 +19,76 @@ DEFAULT_ACCESSIBLE_REGIONS = [
     "ap-south-1",
     "eu-south-1",
     "eu-south-2",
-    "il-central-1",
-    "ca-central-1",
+    # "il-central-1",
+    # "ca-central-1",
     "ap-east-2",
-    "mx-central-1",
+    # "mx-central-1",
     "eu-central-1",
     "eu-central-2",
     "us-west-1",
     "us-west-2",
-    "af-south-1",
+    # "af-south-1",
     "eu-north-1",
     "eu-west-3",
     "eu-west-2",
     "eu-west-1",
-    "ap-northeast-3",
-    "ap-northeast-2",
-    "ap-northeast-1",
-    "sa-east-1",
-    "ca-west-1",
-    "ap-southeast-1",
-    "ap-southeast-2",
-    "ap-southeast-3",
-    "ap-southeast-4",
+    # "ap-northeast-3",
+    # "ap-northeast-2",
+    # "ap-northeast-1",
+    # "sa-east-1",
+    # "ca-west-1",
+    # "ap-southeast-1",
+    # "ap-southeast-2",
+    # "ap-southeast-3",
+    # "ap-southeast-4",
     "us-east-1",
-    "ap-southeast-5",
-    "ap-southeast-6",
+    # "ap-southeast-5",
+    # "ap-southeast-6",
     "us-east-2",
-    "ap-southeast-7",
+    # "ap-southeast-7",
 ]
 
-AWS_GLOBAL_CLAUDE_MODEL_MAPPINGS = [
-    ("claude-3-sonnet-20240229", "global.anthropic.claude-3-sonnet-20240229-v1:0"),
-    ("claude-3-opus-20240229", "global.anthropic.claude-3-opus-20240229-v1:0"),
-    ("claude-3-haiku-20240307", "global.anthropic.claude-3-haiku-20240307-v1:0"),
-    ("claude-3-5-sonnet-20240620", "global.anthropic.claude-3-5-sonnet-20240620-v1:0"),
-    ("claude-3-5-sonnet-20241022", "global.anthropic.claude-3-5-sonnet-20241022-v2:0"),
-    ("claude-3-5-haiku-20241022", "global.anthropic.claude-3-5-haiku-20241022-v1:0"),
-    ("claude-3-7-sonnet-20250219", "global.anthropic.claude-3-7-sonnet-20250219-v1:0"),
-    ("claude-sonnet-4-20250514", "global.anthropic.claude-sonnet-4-20250514-v1:0"),
-    ("claude-opus-4-20250514", "global.anthropic.claude-opus-4-20250514-v1:0"),
-    ("claude-opus-4-1-20250805", "global.anthropic.claude-opus-4-1-20250805-v1:0"),
-    ("claude-sonnet-4-5-20250929", "global.anthropic.claude-sonnet-4-5-20250929-v1:0"),
-    ("claude-sonnet-4-6", "global.anthropic.claude-sonnet-4-6"),
-    ("claude-haiku-4-5-20251001", "global.anthropic.claude-haiku-4-5-20251001-v1:0"),
-    ("claude-opus-4-5-20251101", "global.anthropic.claude-opus-4-5-20251101-v1:0"),
-    ("claude-opus-4-6", "global.anthropic.claude-opus-4-6-v1"),
-    ("claude-opus-4-6-v1", "global.anthropic.claude-opus-4-6-v1"),
-    ("claude-opus-4-7", "global.anthropic.claude-opus-4-7"),
-    ("claude-opus-4-8", "global.anthropic.claude-opus-4-8"),
+AWS_CLAUDE_PRESET_MODELS = [
+    "claude-3-sonnet-20240229",
+    "claude-3-opus-20240229",
+    "claude-3-haiku-20240307",
+    "claude-3-5-sonnet-20240620",
+    "claude-3-5-sonnet-20241022",
+    "claude-3-5-haiku-20241022",
+    "claude-3-7-sonnet-20250219",
+    "claude-sonnet-4-20250514",
+    "claude-opus-4-20250514",
+    "claude-opus-4-1-20250805",
+    "claude-sonnet-4-5-20250929",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5-20251001",
+    "claude-opus-4-5-20251101",
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "global.anthropic.claude-3-sonnet-20240229-v1:0",
+    "global.anthropic.claude-3-opus-20240229-v1:0",
+    "global.anthropic.claude-3-haiku-20240307-v1:0",
+    "global.anthropic.claude-3-5-sonnet-20240620-v1:0",
+    "global.anthropic.claude-3-5-sonnet-20241022-v2:0",
+    "global.anthropic.claude-3-5-haiku-20241022-v1:0",
+    "global.anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "global.anthropic.claude-sonnet-4-20250514-v1:0",
+    "global.anthropic.claude-opus-4-20250514-v1:0",
+    "global.anthropic.claude-opus-4-1-20250805-v1:0",
+    "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "global.anthropic.claude-sonnet-4-6",
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "global.anthropic.claude-opus-4-5-20251101-v1:0",
+    "global.anthropic.claude-opus-4-6-v1",
+    "global.anthropic.claude-opus-4-7",
+    "global.anthropic.claude-opus-4-8",
 ]
 
 CHANNEL_STATUS_ENABLED = 1
+AWS_KEY_TYPE_AKSK = "ak_sk"
+AWS_KEY_TYPE_API_KEY = "api_key"
+AWS_KEY_TYPE_ROLE_ARN = "role_arn"
 
 
 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -109,20 +128,15 @@ def load_regions(args: argparse.Namespace) -> list[str]:
 def resolve_models_and_mapping(args: argparse.Namespace) -> tuple[str, str | None]:
     if args.models:
         models = unique_csv(parse_csv(args.models))
-    elif args.preset == "aws-global-claude":
-        models = unique_csv(
-            [item for pair in AWS_GLOBAL_CLAUDE_MODEL_MAPPINGS for item in pair]
-        )
+    elif args.preset in {"aws-claude", "aws-global-claude"}:
+        models = unique_csv(AWS_CLAUDE_PRESET_MODELS)
     else:
         models = ""
 
     if args.model_mapping:
         mapping = json.dumps(json.loads(args.model_mapping), separators=(",", ":"))
-    elif args.preset == "aws-global-claude":
-        mapping = json.dumps(
-            dict(AWS_GLOBAL_CLAUDE_MODEL_MAPPINGS),
-            separators=(",", ":"),
-        )
+    elif args.preset in {"aws-claude", "aws-global-claude"}:
+        mapping = None
     else:
         mapping = None
 
@@ -142,6 +156,7 @@ def build_payload(
         safe_region=safe_region,
         index=index,
     )
+    channel_key = build_channel_key(args, region, session_name)
     channel: dict[str, Any] = {
         "name": args.name_template.format(
             region=region,
@@ -150,7 +165,7 @@ def build_payload(
         ),
         "type": 33,
         "base_url": None,
-        "key": f"{args.role_arn}|{region}|{session_name}",
+        "key": channel_key,
         "openai_organization": None,
         "models": models,
         "group": args.group,
@@ -176,17 +191,30 @@ def build_payload(
         ),
         "param_override": None,
         "header_override": None,
-        "settings": json.dumps({"aws_key_type": "role_arn"}, separators=(",", ":")),
+        "settings": json.dumps(
+            {"aws_key_type": args.aws_key_type},
+            separators=(",", ":"),
+        ),
         "other": "",
     }
     return {"mode": "single", "channel": channel}
+
+
+def build_channel_key(args: argparse.Namespace, region: str, session_name: str) -> str:
+    if args.aws_key_type == AWS_KEY_TYPE_ROLE_ARN:
+        return f"{args.role_arn}|{region}|{session_name}"
+    if args.aws_key_type == AWS_KEY_TYPE_API_KEY:
+        return f"{args.api_key}|{region}"
+    if args.aws_key_type == AWS_KEY_TYPE_AKSK:
+        return f"{args.access_key_id}|{args.secret_access_key}|{region}"
+    raise ValueError(f"unsupported AWS key type: {args.aws_key_type}")
 
 
 def build_auth_headers(args: argparse.Namespace) -> dict[str, str]:
     headers = {
         "Content-Type": "application/json",
         "New-Api-User": args.user_id,
-        "User-Agent": "new-api-aws-role-channel-cli",
+        "User-Agent": "new-api-aws-channel-cli",
     }
     if args.cookie:
         headers["Cookie"] = args.cookie
@@ -491,19 +519,28 @@ def test_and_maybe_delete_channel(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Create AWS Role ARN channels under one New API group.",
+        description="Create AWS channels under one New API group.",
     )
     parser.add_argument("--base-url", default=os.getenv("NEW_API_BASE_URL", ""))
     parser.add_argument("--cookie", default=os.getenv("NEW_API_COOKIE", ""))
     parser.add_argument("--access-token", default=os.getenv("NEW_API_ACCESS_TOKEN", ""))
     parser.add_argument("--user-id", default=os.getenv("NEW_API_USER_ID", ""))
+    parser.add_argument(
+        "--aws-key-type",
+        choices=[AWS_KEY_TYPE_AKSK, AWS_KEY_TYPE_API_KEY, AWS_KEY_TYPE_ROLE_ARN],
+        default=os.getenv("AWS_BEDROCK_KEY_TYPE", AWS_KEY_TYPE_ROLE_ARN),
+        help="AWS credential mode stored in channel settings.aws_key_type.",
+    )
     parser.add_argument("--role-arn", default=os.getenv("AWS_BEDROCK_ROLE_ARN", ""))
+    parser.add_argument("--api-key", default=os.getenv("AWS_BEDROCK_API_KEY", ""))
+    parser.add_argument("--access-key-id", default=os.getenv("AWS_ACCESS_KEY_ID", ""))
+    parser.add_argument("--secret-access-key", default=os.getenv("AWS_SECRET_ACCESS_KEY", ""))
     parser.add_argument("--group", required=True)
     parser.add_argument("--regions", help="Comma-separated region list. Defaults to known accessible regions.")
     parser.add_argument("--region-file", help="One region per line. Overrides --regions.")
     parser.add_argument("--name-template", default="{region}")
     parser.add_argument("--session-name", default="{safe_region}")
-    parser.add_argument("--preset", choices=["aws-global-claude", "none"], default="aws-global-claude")
+    parser.add_argument("--preset", choices=["aws-claude", "aws-global-claude", "none"], default="aws-claude")
     parser.add_argument("--models", help="Comma-separated model list. Overrides preset models.")
     parser.add_argument("--model-mapping", help="JSON object string. Overrides preset mapping.")
     parser.add_argument("--priority", type=int, default=0)
@@ -527,8 +564,15 @@ def main() -> int:
     missing = []
     if not args.base_url:
         missing.append("--base-url or NEW_API_BASE_URL")
-    if not args.role_arn:
+    if args.aws_key_type == AWS_KEY_TYPE_ROLE_ARN and not args.role_arn:
         missing.append("--role-arn or AWS_BEDROCK_ROLE_ARN")
+    if args.aws_key_type == AWS_KEY_TYPE_API_KEY and not args.api_key:
+        missing.append("--api-key or AWS_BEDROCK_API_KEY")
+    if args.aws_key_type == AWS_KEY_TYPE_AKSK:
+        if not args.access_key_id:
+            missing.append("--access-key-id or AWS_ACCESS_KEY_ID")
+        if not args.secret_access_key:
+            missing.append("--secret-access-key or AWS_SECRET_ACCESS_KEY")
     if not args.dry_run and not args.user_id:
         missing.append("--user-id or NEW_API_USER_ID")
     if missing or (not args.dry_run and not (args.cookie or args.access_token)):
@@ -541,7 +585,7 @@ def main() -> int:
     if not regions:
         parser.error("no regions provided")
     if not models:
-        parser.error("model list is empty; pass --models or use --preset aws-global-claude")
+        parser.error("model list is empty; pass --models or use --preset aws-claude")
 
     payloads = [
         build_payload(args, region, index + 1, models, model_mapping)
