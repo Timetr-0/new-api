@@ -31,6 +31,10 @@ type AwsClaudeRequest struct {
 	//Metadata         json.RawMessage     `json:"metadata,omitempty"`
 }
 
+var bedrockUnsupportedBetaFlags = map[string]bool{
+	"output-128k-2025-02-19": true,
+}
+
 func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaudeRequest, error) {
 	var awsClaudeRequest AwsClaudeRequest
 	err := common.DecodeJson(requestBody, &awsClaudeRequest)
@@ -45,7 +49,7 @@ func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaude
 		var tempArray []string
 		for _, v := range strings.Split(anthropicBetaValues, ",") {
 			v = strings.TrimSpace(v)
-			if v != "" {
+			if v != "" && !bedrockUnsupportedBetaFlags[v] {
 				tempArray = append(tempArray, v)
 			}
 		}
