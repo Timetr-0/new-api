@@ -145,9 +145,10 @@ func Distribute() func(c *gin.Context) {
 							showGroup = fmt.Sprintf("auto(%s)", selectGroup)
 						}
 						message := i18n.T(c, i18n.MsgDistributorGetChannelFailed, map[string]any{"Group": showGroup, "Model": modelRequest.Model, "Error": err.Error()})
-						// 濡傛灉閿欒锛屼絾鏄笭閬撲笉涓虹┖锛岃鏄庢槸鏁版嵁搴撲竴鑷存€ч棶棰?						//if channel != nil {
-						//	common.SysError(fmt.Sprintf("娓犻亾涓嶅瓨鍦細%d", channel.Id))
-						//	message = "鏁版嵁搴撲竴鑷存€у凡琚牬鍧忥紝璇疯仈绯荤鐞嗗憳"
+						// 如果错误，但是渠道不为空，说明是数据库一致性问题
+						//if channel != nil {
+						//	common.SysError(fmt.Sprintf("渠道不存在：%d", channel.Id))
+						//	message = "数据库一致性已被破坏，请联系管理员"
 						//}
 						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, message, types.ErrorCodeModelNotFound)
 						return
@@ -184,8 +185,9 @@ func channelSupportsRequestPath(channel *model.Channel, requestPath string, requ
 	return config != nil && config.SupportsPathForModel(requestPath, requestModel)
 }
 
-// getModelFromRequest 浠庤姹備腑璇诲彇妯″瀷淇℃伅
-// 鏍规嵁 Content-Type 鑷姩澶勭悊锛?// - application/json
+// getModelFromRequest 从请求中读取模型信息
+// 根据 Content-Type 自动处理：
+// - application/json
 // - application/x-www-form-urlencoded
 // - multipart/form-data
 func getModelFromRequest(c *gin.Context) (*ModelRequest, error) {
@@ -336,7 +338,7 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 			c.Set("relay_mode", relayMode)
 		}
 	} else if strings.HasPrefix(c.Request.URL.Path, "/v1beta/models/") || strings.HasPrefix(c.Request.URL.Path, "/v1/models/") {
-		// Gemini API 璺緞澶勭悊: /v1beta/models/gemini-2.0-flash:generateContent
+		// Gemini API 路径处理: /v1beta/models/gemini-2.0-flash:generateContent
 		relayMode := relayconstant.RelayModeGemini
 		modelName := extractModelNameFromGeminiPath(c.Request.URL.Path)
 		if modelName != "" {
@@ -382,14 +384,14 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 
 			modelRequest.Model = common.GetStringIfEmpty(modelRequest.Model, "tts-1")
 		} else if strings.HasPrefix(c.Request.URL.Path, "/v1/audio/translations") {
-			// 鍏堝皾璇曚粠璇锋眰璇诲彇
+			// 先尝试从请求读取
 			if req, err := getModelFromRequest(c); err == nil && req.Model != "" {
 				modelRequest.Model = req.Model
 			}
 			modelRequest.Model = common.GetStringIfEmpty(modelRequest.Model, "whisper-1")
 			relayMode = relayconstant.RelayModeAudioTranslation
 		} else if strings.HasPrefix(c.Request.URL.Path, "/v1/audio/transcriptions") {
-			// 鍏堝皾璇曚粠璇锋眰璇诲彇
+			// 先尝试从请求读取
 			if req, err := getModelFromRequest(c); err == nil && req.Model != "" {
 				modelRequest.Model = req.Model
 			}
@@ -415,8 +417,11 @@ func getModelRequest(c *gin.Context) (*ModelRequest, bool, error) {
 	return &modelRequest, shouldSelectChannel, nil
 }
 
-// 淇 #4834: GET /v1/video/generations/:task_id && /v1/video/:task_id 姝ゅ墠涓嶈В鏋?model锛?// 褰?token 鍚敤銆屽彲鐢ㄦā鍨嬮檺鍒躲€嶆椂锛屼笅娓?modelLimitEnable 鏍￠獙浼氬洜
-// modelRequest.Model 涓虹┖鑰岃鎶?"This token has no access to model"銆?// 浠庡凡瀛樺偍鐨勪换鍔¤褰曚腑鍥炲～ OriginModelName 鍗冲彲璁╂牎楠岃蛋鍦ㄦ纭殑妯″瀷涓娿€?func getTaskOriginModelName(c *gin.Context) string {
+// 修复 #4834: GET /v1/video/generations/:task_id && /v1/video/:task_id 此前不解析 model，
+// 当 token 启用「可用模型限制」时，下游 modelLimitEnable 校验会因
+// modelRequest.Model 为空而误报 "This token has no access to model"。
+// 从已存储的任务记录中回填 OriginModelName 即可让校验走在正确的模型上。
+func getTaskOriginModelName(c *gin.Context) string {
 	if !common.GetContextKeyBool(c, constant.ContextKeyTokenModelLimitEnabled) {
 		return ""
 	}
@@ -470,7 +475,7 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 		common.SetContextKey(c, constant.ContextKeyChannelIsMultiKey, true)
 		common.SetContextKey(c, constant.ContextKeyChannelMultiKeyIndex, index)
 	} else {
-		// 蹇呴』璁剧疆涓?false锛屽惁鍒欏湪閲嶈瘯鍒板崟涓?key 鐨勬椂鍊欎細瀵艰嚧鏃ュ織鏄剧ず閿欒
+		// 必须设置为 false，否则在重试到单个 key 的时候会导致日志显示错误
 		common.SetContextKey(c, constant.ContextKeyChannelIsMultiKey, false)
 	}
 	// c.Request.Header.Set("Authorization", fmt.Sprintf("Bearer %s", key))
@@ -479,7 +484,7 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 
 	common.SetContextKey(c, constant.ContextKeySystemPromptOverride, false)
 
-	// TODO: api_version缁熶竴
+	// TODO: api_version统一
 	switch channel.Type {
 	case constant.ChannelTypeAzure:
 		c.Set("api_version", channel.Other)
@@ -501,27 +506,30 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	return nil
 }
 
-// extractModelNameFromGeminiPath 浠?Gemini API URL 璺緞涓彁鍙栨ā鍨嬪悕
-// 杈撳叆鏍煎紡: /v1beta/models/gemini-2.0-flash:generateContent
-// 杈撳嚭: gemini-2.0-flash
+// extractModelNameFromGeminiPath 从 Gemini API URL 路径中提取模型名
+// 输入格式: /v1beta/models/gemini-2.0-flash:generateContent
+// 输出: gemini-2.0-flash
 func extractModelNameFromGeminiPath(path string) string {
-	// 鏌ユ壘 "/models/" 鐨勪綅缃?	modelsPrefix := "/models/"
+	// 查找 "/models/" 的位置
+	modelsPrefix := "/models/"
 	modelsIndex := strings.Index(path, modelsPrefix)
 	if modelsIndex == -1 {
 		return ""
 	}
 
-	// 浠?"/models/" 涔嬪悗寮€濮嬫彁鍙?	startIndex := modelsIndex + len(modelsPrefix)
+	// 从 "/models/" 之后开始提取
+	startIndex := modelsIndex + len(modelsPrefix)
 	if startIndex >= len(path) {
 		return ""
 	}
 
-	// 鏌ユ壘 ":" 鐨勪綅缃紝妯″瀷鍚嶅湪 ":" 涔嬪墠
+	// 查找 ":" 的位置，模型名在 ":" 之前
 	colonIndex := strings.Index(path[startIndex:], ":")
 	if colonIndex == -1 {
-		// 濡傛灉娌℃湁鎵惧埌 ":"锛岃繑鍥炰粠 "/models/" 鍒拌矾寰勭粨灏剧殑閮ㄥ垎
+		// 如果没有找到 ":"，返回从 "/models/" 到路径结尾的部分
 		return path[startIndex:]
 	}
 
-	// 杩斿洖妯″瀷鍚嶉儴鍒?	return path[startIndex : startIndex+colonIndex]
+	// 返回模型名部分
+	return path[startIndex : startIndex+colonIndex]
 }

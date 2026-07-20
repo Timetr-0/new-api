@@ -61,7 +61,7 @@ func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaude
 	return &awsClaudeRequest, nil
 }
 
-// NovaMessage Nova妯″瀷浣跨敤messages-v1鏍煎紡
+// NovaMessage Nova模型使用messages-v1格式
 type NovaMessage struct {
 	Role    string        `json:"role"`
 	Content []NovaContent `json:"content"`
@@ -72,17 +72,20 @@ type NovaContent struct {
 }
 
 type NovaRequest struct {
-	SchemaVersion   string               `json:"schemaVersion"`             // 璇锋眰鐗堟湰锛屼緥濡?"1.0"
-	Messages        []NovaMessage        `json:"messages"`                  // 瀵硅瘽娑堟伅鍒楄〃
-	InferenceConfig *NovaInferenceConfig `json:"inferenceConfig,omitempty"` // 鎺ㄧ悊閰嶇疆锛屽彲閫?}
+	SchemaVersion   string               `json:"schemaVersion"`             // 请求版本，例如 "1.0"
+	Messages        []NovaMessage        `json:"messages"`                  // 对话消息列表
+	InferenceConfig *NovaInferenceConfig `json:"inferenceConfig,omitempty"` // 推理配置，可选
+}
 
 type NovaInferenceConfig struct {
-	MaxTokens     int      `json:"maxTokens,omitempty"`     // 鏈€澶х敓鎴愮殑 token 鏁?	Temperature   float64  `json:"temperature,omitempty"`   // 闅忔満鎬?(榛樿 0.7, 鑼冨洿 0-1)
-	TopP          float64  `json:"topP,omitempty"`          // nucleus sampling (榛樿 0.9, 鑼冨洿 0-1)
-	TopK          int      `json:"topK,omitempty"`          // 闄愬埗鍊欓€?token 鏁?(榛樿 50, 鑼冨洿 0-128)
-	StopSequences []string `json:"stopSequences,omitempty"` // 鍋滄鐢熸垚鐨勫簭鍒?}
+	MaxTokens     int      `json:"maxTokens,omitempty"`     // 最大生成的 token 数
+	Temperature   float64  `json:"temperature,omitempty"`   // 随机性 (默认 0.7, 范围 0-1)
+	TopP          float64  `json:"topP,omitempty"`          // nucleus sampling (默认 0.9, 范围 0-1)
+	TopK          int      `json:"topK,omitempty"`          // 限制候选 token 数 (默认 50, 范围 0-128)
+	StopSequences []string `json:"stopSequences,omitempty"` // 停止生成的序列
+}
 
-// 杞崲OpenAI璇锋眰涓篘ova鏍煎紡
+// 转换OpenAI请求为Nova格式
 func convertToNovaRequest(req *dto.GeneralOpenAIRequest) *NovaRequest {
 	novaMessages := make([]NovaMessage, len(req.Messages))
 	for i, msg := range req.Messages {
@@ -97,7 +100,7 @@ func convertToNovaRequest(req *dto.GeneralOpenAIRequest) *NovaRequest {
 		Messages:      novaMessages,
 	}
 
-	// 璁剧疆鎺ㄧ悊閰嶇疆
+	// 设置推理配置
 	if (req.MaxTokens != nil && *req.MaxTokens != 0) || (req.Temperature != nil && *req.Temperature != 0) || (req.TopP != nil && *req.TopP != 0) || (req.TopK != nil && *req.TopK != 0) || req.Stop != nil {
 		novaReq.InferenceConfig = &NovaInferenceConfig{}
 		if req.MaxTokens != nil && *req.MaxTokens != 0 {
@@ -122,7 +125,7 @@ func convertToNovaRequest(req *dto.GeneralOpenAIRequest) *NovaRequest {
 	return novaReq
 }
 
-// parseStopSequences 瑙ｆ瀽鍋滄搴忓垪锛屾敮鎸佸瓧绗︿覆鎴栧瓧绗︿覆鏁扮粍
+// parseStopSequences 解析停止序列，支持字符串或字符串数组
 func parseStopSequences(stop any) []string {
 	if stop == nil {
 		return nil
