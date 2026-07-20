@@ -38,6 +38,25 @@ var bedrockSupportedBetaPrefixes = []string{
 	"computer-use-",
 }
 
+func filterBedrockBetaFlags(req *http.Header) {
+	beta := req.Get("anthropic-beta")
+	if beta == "" {
+		return
+	}
+	var filtered []string
+	for _, v := range strings.Split(beta, ",") {
+		v = strings.TrimSpace(v)
+		if v != "" && isBedrockSupportedBeta(v) {
+			filtered = append(filtered, v)
+		}
+	}
+	if len(filtered) > 0 {
+		req.Set("anthropic-beta", strings.Join(filtered, ","))
+	} else {
+		req.Del("anthropic-beta")
+	}
+}
+
 func isBedrockSupportedBeta(flag string) bool {
 	for _, prefix := range bedrockSupportedBetaPrefixes {
 		if strings.HasPrefix(flag, prefix) {
