@@ -137,8 +137,8 @@ import {
 } from '../../api'
 import {
   ADD_MODE_OPTIONS,
-  AWS_GLOBAL_CLAUDE_MAPPING,
-  AWS_GLOBAL_CLAUDE_MODELS,
+  AWS_CLAUDE_MODELS,
+  AWS_LEGACY_GLOBAL_CLAUDE_MAPPING,
   CHANNEL_STATUS_LABELS,
   CHANNEL_TYPE_OPTIONS,
   CHANNEL_TYPE_WARNINGS,
@@ -1513,35 +1513,56 @@ export function ChannelMutateDrawer({
     [updateModels, t]
   )
 
-  const handleApplyAwsGlobalClaudePreset = useCallback(() => {
-    const currentMapping = form.getValues('model_mapping')?.trim()
-    let mapping: Record<string, string> = {}
+  const handleApplyAwsClaudePreset = useCallback(() => {
+    const presetModels = new Set<string>(AWS_CLAUDE_MODELS)
+    const legacyGlobalSources = new Set<string>(
+      Object.keys(AWS_LEGACY_GLOBAL_CLAUDE_MAPPING)
+    )
+    form.setValue(
+      'models',
+      formatModelsArray([
+        ...currentModelsArray.filter(
+          (model) =>
+            !legacyGlobalSources.has(model) || presetModels.has(model)
+        ),
+        ...AWS_CLAUDE_MODELS,
+      ])
+    )
 
+    const currentMapping = form.getValues('model_mapping')?.trim()
     if (currentMapping) {
       try {
         const parsed = JSON.parse(currentMapping)
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
           throw new Error('Invalid model mapping')
         }
-        mapping = Object.fromEntries(
+
+        const legacyEntries = Object.entries(
+          AWS_LEGACY_GLOBAL_CLAUDE_MAPPING
+        )
+        const nextMapping = Object.fromEntries(
           Object.entries(parsed).filter(
-            ([, value]) => typeof value === 'string'
+            ([source, target]) =>
+              typeof target === 'string' &&
+              !legacyEntries.some(
+                ([legacySource, legacyTarget]) =>
+                  source === legacySource && target === legacyTarget
+              )
           )
         ) as Record<string, string>
+        form.setValue(
+          'model_mapping',
+          Object.keys(nextMapping).length
+            ? JSON.stringify(nextMapping, null, 2)
+            : ''
+        )
       } catch {
-        toast.error(t('Invalid model mapping format'))
-        return
+        // Keep custom mapping untouched if it cannot be parsed.
       }
     }
 
-    updateModels(AWS_GLOBAL_CLAUDE_MODELS, true)
-    const nextMapping = {
-      ...mapping,
-      ...AWS_GLOBAL_CLAUDE_MAPPING,
-    }
-    form.setValue('model_mapping', JSON.stringify(nextMapping, null, 2))
-    toast.success(t('Applied AWS Global Claude preset'))
-  }, [form, t, updateModels])
+    toast.success(t('Applied AWS Claude model ID preset'))
+  }, [currentModelsArray, form, t])
 
   // Handle model selection change from MultiSelect
   const handleModelsChange = useCallback(
@@ -3474,13 +3495,13 @@ export function ChannelMutateDrawer({
                                     type='button'
                                     variant='secondary'
                                     size='sm'
-                                    onClick={handleApplyAwsGlobalClaudePreset}
+                                    onClick={handleApplyAwsClaudePreset}
                                   >
                                     <Wand2
                                       className='mr-2 h-4 w-4'
                                       aria-hidden='true'
                                     />
-                                    {t('AWS Global Claude Models')}
+                                    {t('AWS Claude Model IDs')}
                                   </Button>
                                 </div>
                               )}
