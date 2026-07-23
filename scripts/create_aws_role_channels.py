@@ -19,7 +19,7 @@ DEFAULT_ACCESSIBLE_REGIONS = [
     "ap-south-1",
     "eu-south-1",
     "eu-south-2",
-    # "il-central-1",
+    "il-central-1",
     # "ca-central-1",
     "ap-east-2",
     # "mx-central-1",
@@ -527,8 +527,10 @@ def main() -> int:
     parser.add_argument("--user-id", default=os.getenv("NEW_API_USER_ID", ""))
     parser.add_argument(
         "--aws-key-type",
+        "--key-type",
         choices=[AWS_KEY_TYPE_AKSK, AWS_KEY_TYPE_API_KEY, AWS_KEY_TYPE_ROLE_ARN],
         default=os.getenv("AWS_BEDROCK_KEY_TYPE", AWS_KEY_TYPE_ROLE_ARN),
+        dest="aws_key_type",
         help="AWS credential mode stored in channel settings.aws_key_type.",
     )
     parser.add_argument("--role-arn", default=os.getenv("AWS_BEDROCK_ROLE_ARN", ""))

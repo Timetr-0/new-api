@@ -74,6 +74,50 @@ func TestGetRequestURL_SupportsRoleArnKeyType(t *testing.T) {
 	require.Equal(t, ClientModeRoleArn, adaptor.ClientMode)
 }
 
+func TestGetRequestURL_SupportsApiKeyKeyType(t *testing.T) {
+	t.Parallel()
+
+	adaptor := &Adaptor{}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ApiKey:            " bedrock-api-key | us-west-2 ",
+			UpstreamModelName: "claude-3-5-sonnet-20240620",
+			ChannelOtherSettings: dto.ChannelOtherSettings{
+				AwsKeyType: dto.AwsKeyTypeApiKey,
+			},
+		},
+	}
+
+	requestURL, err := adaptor.GetRequestURL(info)
+	require.NoError(t, err)
+	require.Equal(t, "https://bedrock-runtime.us-west-2.amazonaws.com/model/anthropic.claude-3-5-sonnet-20240620-v1:0/converse", requestURL)
+	require.Equal(t, ClientModeApiKey, adaptor.ClientMode)
+}
+
+func TestSetupRequestHeader_UsesOnlyAwsApiKeyForBearerToken(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	adaptor := &Adaptor{ClientMode: ClientModeApiKey}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ApiKey: " bedrock-api-key | us-west-2 ",
+			ChannelOtherSettings: dto.ChannelOtherSettings{
+				AwsKeyType: dto.AwsKeyTypeApiKey,
+			},
+		},
+	}
+	headers := http.Header{}
+
+	err := adaptor.SetupRequestHeader(ctx, &headers, info)
+	require.NoError(t, err)
+	require.Equal(t, "Bearer bedrock-api-key", headers.Get("Authorization"))
+}
+
 func TestSplitAwsSecretTrimsParts(t *testing.T) {
 	t.Parallel()
 

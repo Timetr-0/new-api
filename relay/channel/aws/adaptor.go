@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
@@ -94,11 +93,11 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	case dto.AwsKeyTypeApiKey:
 		awsModelId := getAwsModelID(info.UpstreamModelName)
 		a.ClientMode = ClientModeApiKey
-		awsSecret := strings.Split(info.ApiKey, "|")
+		awsSecret := splitAwsSecret(info.ApiKey)
 		if len(awsSecret) != 2 {
 			return "", errors.New("invalid aws api key, should be in format of <api-key>|<region>")
 		}
-		return fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com/model/%s/converse", awsModelId, awsSecret[1]), nil
+		return fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com/model/%s/converse", awsSecret[1], awsModelId), nil
 	case dto.AwsKeyTypeRoleArn:
 		a.ClientMode = ClientModeRoleArn
 		return "", nil
@@ -112,7 +111,11 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 	claude.CommonClaudeHeadersOperation(c, req, info)
 	filterBedrockBetaFlags(req)
 	if a.ClientMode == ClientModeApiKey {
-		req.Set("Authorization", "Bearer "+info.ApiKey)
+		awsSecret := splitAwsSecret(info.ApiKey)
+		if len(awsSecret) != 2 || awsSecret[0] == "" {
+			return errors.New("invalid aws api key, should be in format of <api-key>|<region>")
+		}
+		req.Set("Authorization", "Bearer "+awsSecret[0])
 	}
 	return nil
 }
