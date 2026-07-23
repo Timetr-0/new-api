@@ -109,7 +109,6 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *relaycommon.RelayInfo) error {
 	claude.CommonClaudeHeadersOperation(c, req, info)
-	filterBedrockBetaFlags(req)
 	if a.ClientMode == ClientModeApiKey {
 		awsSecret := splitAwsSecret(info.ApiKey)
 		if len(awsSecret) != 2 || awsSecret[0] == "" {

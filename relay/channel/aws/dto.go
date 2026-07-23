@@ -31,41 +31,6 @@ type AwsClaudeRequest struct {
 	//Metadata         json.RawMessage     `json:"metadata,omitempty"`
 }
 
-var bedrockSupportedBetaPrefixes = []string{
-	"interleaved-thinking-",
-	"fine-grained-tool-streaming-",
-	"token-efficient-tools-",
-	"computer-use-",
-}
-
-func filterBedrockBetaFlags(req *http.Header) {
-	beta := req.Get("anthropic-beta")
-	if beta == "" {
-		return
-	}
-	var filtered []string
-	for _, v := range strings.Split(beta, ",") {
-		v = strings.TrimSpace(v)
-		if v != "" && isBedrockSupportedBeta(v) {
-			filtered = append(filtered, v)
-		}
-	}
-	if len(filtered) > 0 {
-		req.Set("anthropic-beta", strings.Join(filtered, ","))
-	} else {
-		req.Del("anthropic-beta")
-	}
-}
-
-func isBedrockSupportedBeta(flag string) bool {
-	for _, prefix := range bedrockSupportedBetaPrefixes {
-		if strings.HasPrefix(flag, prefix) {
-			return true
-		}
-	}
-	return false
-}
-
 func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaudeRequest, error) {
 	var awsClaudeRequest AwsClaudeRequest
 	err := common.DecodeJson(requestBody, &awsClaudeRequest)
@@ -81,12 +46,12 @@ func formatRequest(requestBody io.Reader, requestHeader http.Header) (*AwsClaude
 		var tempArray []string
 		for _, v := range strings.Split(anthropicBetaValues, ",") {
 			v = strings.TrimSpace(v)
-			if v != "" && isBedrockSupportedBeta(v) {
+			if v != "" {
 				tempArray = append(tempArray, v)
 			}
 		}
 		if len(tempArray) > 0 {
-			betaJson, err := json.Marshal(tempArray)
+			betaJson, err := common.Marshal(tempArray)
 			if err != nil {
 				return nil, err
 			}
