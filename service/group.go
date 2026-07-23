@@ -43,13 +43,9 @@ func GroupInUserUsableGroups(userGroup, groupName string) bool {
 
 // GetUserAutoGroup 根据用户分组获取自动分组设置
 func GetUserAutoGroup(userGroup string) []string {
-	groups := GetUserUsableGroups(userGroup)
-	autoGroups := make([]string, 0)
-	for _, group := range setting.GetAutoGroups() {
-		if _, ok := groups[group]; ok {
-			autoGroups = append(autoGroups, group)
-		}
-	}
+	configuredGroups := setting.GetAutoGroups()
+	autoGroups := make([]string, len(configuredGroups))
+	copy(autoGroups, configuredGroups)
 	return autoGroups
 }
 
