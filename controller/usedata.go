@@ -1,14 +1,28 @@
 package controller
 
 import (
+	"encoding/csv"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 
 	"github.com/gin-gonic/gin"
 )
+
+var userUsageExportFieldLabels = map[string]string{
+	"user_id":    "user_id",
+	"username":   "username",
+	"model_name": "model_name",
+	"requests":   "requests",
+	"quota":      "quota",
+	"cost_usd":   "cost_usd",
+	"tokens":     "tokens",
+}
 
 func parseFlowQuotaTimeRange(c *gin.Context) (int64, int64, bool) {
 	startTimestamp, err := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
@@ -26,6 +40,89 @@ func parseFlowQuotaTimeRange(c *gin.Context) (int64, int64, bool) {
 		return 0, 0, false
 	}
 	return startTimestamp, endTimestamp, true
+}
+
+func parseUserUsageExportFields(fields string) []string {
+	defaultFields := []string{"user_id", "username", "model_name", "cost_usd", "tokens"}
+	if strings.TrimSpace(fields) == "" {
+		return defaultFields
+	}
+	seen := make(map[string]bool)
+	selected := make([]string, 0)
+	for _, field := range strings.Split(fields, ",") {
+		field = strings.TrimSpace(field)
+		if _, ok := userUsageExportFieldLabels[field]; ok && !seen[field] {
+			selected = append(selected, field)
+			seen[field] = true
+		}
+	}
+	if len(selected) == 0 {
+		return defaultFields
+	}
+	return selected
+}
+
+func writeUserUsageExportValue(record []string, field string, data *model.UserUsageExportData) []string {
+	switch field {
+	case "user_id":
+		return append(record, strconv.Itoa(data.UserID))
+	case "username":
+		return append(record, data.Username)
+	case "model_name":
+		return append(record, data.ModelName)
+	case "requests":
+		return append(record, strconv.FormatInt(data.Count, 10))
+	case "quota":
+		return append(record, strconv.FormatInt(data.Quota, 10))
+	case "cost_usd":
+		return append(record, fmt.Sprintf("%.2f", float64(data.Quota)/common.QuotaPerUnit))
+	case "tokens":
+		return append(record, strconv.FormatInt(data.TokenUsed, 10))
+	default:
+		return record
+	}
+}
+
+func ExportUserUsageData(c *gin.Context) {
+	startTimestamp, endTimestamp, ok := parseFlowQuotaTimeRange(c)
+	if !ok {
+		return
+	}
+	if endTimestamp <= startTimestamp {
+		common.ApiErrorMsg(c, "invalid time range")
+		return
+	}
+	fields := parseUserUsageExportFields(c.Query("fields"))
+	usageData, err := model.GetUserUsageExportData(startTimestamp, endTimestamp)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	filename := fmt.Sprintf("user_usage_%s.csv", time.Now().Format("20060102150405"))
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	c.Status(http.StatusOK)
+	_, _ = c.Writer.Write([]byte("\xEF\xBB\xBF"))
+
+	writer := csv.NewWriter(c.Writer)
+	header := make([]string, 0, len(fields))
+	for _, field := range fields {
+		header = append(header, userUsageExportFieldLabels[field])
+	}
+	if err := writer.Write(header); err != nil {
+		return
+	}
+	for _, data := range usageData {
+		record := make([]string, 0, len(fields))
+		for _, field := range fields {
+			record = writeUserUsageExportValue(record, field, data)
+		}
+		if err := writer.Write(record); err != nil {
+			return
+		}
+	}
+	writer.Flush()
 }
 
 func GetAllQuotaDates(c *gin.Context) {

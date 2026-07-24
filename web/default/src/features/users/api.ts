@@ -163,6 +163,27 @@ export async function getPermissionCatalog(): Promise<PermissionCatalog> {
   }
 }
 
+export interface ExportUserUsageParams {
+  start_timestamp: number
+  end_timestamp: number
+  fields: string[]
+}
+
+export async function exportUserUsage(
+  params: ExportUserUsageParams
+): Promise<Blob> {
+  const queryParams = new URLSearchParams()
+  queryParams.set('start_timestamp', String(params.start_timestamp))
+  queryParams.set('end_timestamp', String(params.end_timestamp))
+  queryParams.set('fields', params.fields.join(','))
+  const res = await api.get(`/api/data/user_usage_export?${queryParams}`, {
+    responseType: 'blob',
+    disableDuplicate: true,
+    skipBusinessError: true,
+  })
+  return res.data
+}
+
 // ============================================================================
 // Admin Binding Management APIs
 // ============================================================================

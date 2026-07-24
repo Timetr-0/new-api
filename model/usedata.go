@@ -38,6 +38,15 @@ type QuotaDataLogParams struct {
 	NodeName  string
 }
 
+type UserUsageExportData struct {
+	UserID    int    `json:"user_id"`
+	Username  string `json:"username"`
+	ModelName string `json:"model_name"`
+	Count     int64  `json:"count"`
+	Quota     int64  `json:"quota"`
+	TokenUsed int64  `json:"token_used"`
+}
+
 func UpdateQuotaData() {
 	for {
 		if common.DataExportEnabled {
@@ -180,4 +189,15 @@ func GetAllQuotaDates(startTime int64, endTime int64, username string) (quotaDat
 	//err = DB.Table("quota_data").Where("created_at >= ? and created_at <= ?", startTime, endTime).Find(&quotaDatas).Error
 	err = DB.Table("quota_data").Select("model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used, created_at").Where("created_at >= ? and created_at <= ?", startTime, endTime).Group("model_name, created_at").Find(&quotaDatas).Error
 	return quotaDatas, err
+}
+
+func GetUserUsageExportData(startTime int64, endTime int64) (usageData []*UserUsageExportData, err error) {
+	var data []*UserUsageExportData
+	err = DB.Table("quota_data").
+		Select("user_id, username, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+		Where("created_at >= ? and created_at < ?", startTime, endTime).
+		Group("user_id, username, model_name").
+		Order("sum(quota) desc").
+		Find(&data).Error
+	return data, err
 }
