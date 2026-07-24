@@ -199,7 +199,6 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
       accessorKey: 'group',
       header: t('Group'),
       cell: ({ row }) => {
-        const apiKey = row.original
         const group = row.getValue('group') as string
         const ratio = group && group !== 'auto' ? groupRatios[group] : undefined
 
@@ -210,13 +209,6 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
                 render={<BadgeCell className='gap-1.5 text-xs' />}
               >
                 <GroupBadge group='auto' />
-                {apiKey.cross_group_retry && (
-                  <StatusBadge
-                    label={t('Cross-group')}
-                    variant='info'
-                    copyable={false}
-                  />
-                )}
               </TooltipTrigger>
               <TooltipContent>
                 <span className='text-xs'>
