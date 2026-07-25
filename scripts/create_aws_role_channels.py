@@ -105,8 +105,8 @@ AWS_CLAUDE_PRESET_MODELS = [
     "claude-haiku-4-5-20251001",
     "claude-opus-4-5-20251101",
     "claude-opus-4-6",
-    "claude-opus-4-7",
-    "claude-opus-4-8",
+    # "claude-opus-4-7",
+    # "claude-opus-4-8",
     "global.anthropic.claude-3-sonnet-20240229-v1:0",
     "global.anthropic.claude-3-opus-20240229-v1:0",
     "global.anthropic.claude-3-haiku-20240307-v1:0",
@@ -122,8 +122,8 @@ AWS_CLAUDE_PRESET_MODELS = [
     "global.anthropic.claude-haiku-4-5-20251001-v1:0",
     "global.anthropic.claude-opus-4-5-20251101-v1:0",
     "global.anthropic.claude-opus-4-6-v1",
-    "global.anthropic.claude-opus-4-7",
-    "global.anthropic.claude-opus-4-8",
+    # "global.anthropic.claude-opus-4-7",
+    # "global.anthropic.claude-opus-4-8",
 ]
 
 CHANNEL_STATUS_ENABLED = 1
