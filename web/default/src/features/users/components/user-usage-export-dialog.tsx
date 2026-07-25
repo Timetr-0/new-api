@@ -45,6 +45,7 @@ const EXPORT_FIELDS = [
   { key: 'user_id', label: 'User ID' },
   { key: 'username', label: 'Username' },
   { key: 'model_name', label: 'Model' },
+  { key: 'use_group', label: 'Usage Group' },
   { key: 'cost_usd', label: 'Cost (USD)' },
   { key: 'tokens', label: 'Tokens' },
   { key: 'requests', label: 'Requests' },

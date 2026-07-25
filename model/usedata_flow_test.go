@@ -2,6 +2,7 @@ package model
 
 import (
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/stretchr/testify/require"
@@ -190,4 +191,82 @@ func TestLogQuotaDataSplitsRowsByUseGroupTokenChannelAndNode(t *testing.T) {
 	require.Equal(t, 60, rows[0].TokenUsed)
 	require.Equal(t, "default", rows[1].UseGroup)
 	require.Equal(t, 25, rows[1].Quota)
+}
+
+func TestGetUserUsageExportDataCanGroupByUseGroup(t *testing.T) {
+	truncateTables(t)
+
+	seedFlowQuotaData(t, QuotaData{
+		UserID:    1,
+		Username:  "alice",
+		ModelName: "gpt-a",
+		CreatedAt: 1100,
+		UseGroup:  "vip",
+		Count:     2,
+		Quota:     100,
+		TokenUsed: 40,
+	})
+	seedFlowQuotaData(t, QuotaData{
+		UserID:    1,
+		Username:  "alice",
+		ModelName: "gpt-a",
+		CreatedAt: 1200,
+		UseGroup:  "default",
+		Count:     1,
+		Quota:     50,
+		TokenUsed: 20,
+	})
+
+	mergedRows, err := GetUserUsageExportData(1000, 2000, false)
+	require.NoError(t, err)
+	require.Len(t, mergedRows, 1)
+	require.Empty(t, mergedRows[0].UseGroup)
+	require.EqualValues(t, 150, mergedRows[0].Quota)
+	require.EqualValues(t, 60, mergedRows[0].TokenUsed)
+
+	groupedRows, err := GetUserUsageExportData(1000, 2000, true)
+	require.NoError(t, err)
+	require.Len(t, groupedRows, 2)
+	require.Equal(t, "vip", groupedRows[0].UseGroup)
+	require.EqualValues(t, 100, groupedRows[0].Quota)
+	require.Equal(t, "default", groupedRows[1].UseGroup)
+	require.EqualValues(t, 50, groupedRows[1].Quota)
+}
+
+func TestSumUsedQuotaFiltersByActualLogGroup(t *testing.T) {
+	truncateTables(t)
+	now := time.Now().Unix()
+
+	require.NoError(t, LOG_DB.Create(&Log{
+		UserId:           1,
+		Username:         "alice",
+		TokenName:        "api-key",
+		ModelName:        "gpt-a",
+		CreatedAt:        now,
+		Type:             LogTypeConsume,
+		Group:            "vip",
+		Quota:            100,
+		PromptTokens:     40,
+		CompletionTokens: 20,
+	}).Error)
+	require.NoError(t, LOG_DB.Create(&Log{
+		UserId:           1,
+		Username:         "alice",
+		TokenName:        "api-key",
+		ModelName:        "gpt-a",
+		CreatedAt:        now,
+		Type:             LogTypeConsume,
+		Group:            "default",
+		Quota:            50,
+		PromptTokens:     10,
+		CompletionTokens: 5,
+	}).Error)
+
+	vipStat, err := SumUsedQuota(LogTypeUnknown, now-10, now+10, "gpt-a", "alice", "api-key", 0, "vip")
+	require.NoError(t, err)
+	require.Equal(t, Stat{Quota: 100, Rpm: 1, Tpm: 60}, vipStat)
+
+	defaultStat, err := SumUsedQuota(LogTypeUnknown, now-10, now+10, "gpt-a", "alice", "api-key", 0, "default")
+	require.NoError(t, err)
+	require.Equal(t, Stat{Quota: 50, Rpm: 1, Tpm: 15}, defaultStat)
 }

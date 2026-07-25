@@ -535,6 +535,7 @@ export const STATIC_I18N_KEYS = [
   'Node',
   'Token',
   'Group',
+  'Usage Group',
   'Model',
   'Channel',
   'The user who made the requests',

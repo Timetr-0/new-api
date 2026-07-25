@@ -1,8 +1,10 @@
 package controller
 
 import (
+	"encoding/csv"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
@@ -132,4 +134,38 @@ func TestGetUserFlowQuotaDatesRejectsInvalidTimeRange(t *testing.T) {
 	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &payload))
 	require.False(t, payload.Success)
 	require.Equal(t, "invalid start_timestamp", payload.Message)
+}
+
+func TestExportUserUsageDataCanSelectUseGroup(t *testing.T) {
+	setupFlowControllerTestDB(t)
+	require.NoError(t, model.DB.Create(&model.QuotaData{
+		UserID:    1,
+		Username:  "alice",
+		NodeName:  "node-a",
+		TokenID:   11,
+		UseGroup:  "vip",
+		ChannelID: 1,
+		ModelName: "gpt-a",
+		CreatedAt: 1300,
+		Count:     1,
+		Quota:     30,
+		TokenUsed: 10,
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/data/user_usage/export?start_timestamp=1000&end_timestamp=2000&fields=username,use_group,quota", nil)
+
+	ExportUserUsageData(ctx)
+
+	require.Equal(t, http.StatusOK, recorder.Code)
+	reader := csv.NewReader(strings.NewReader(strings.TrimPrefix(recorder.Body.String(), "\ufeff")))
+	rows, err := reader.ReadAll()
+	require.NoError(t, err)
+	require.Equal(t, [][]string{
+		{"username", "use_group", "quota"},
+		{"alice", "default", "100"},
+		{"bob", "vip", "70"},
+		{"alice", "vip", "30"},
+	}, rows)
 }

@@ -42,6 +42,7 @@ type UserUsageExportData struct {
 	UserID    int    `json:"user_id"`
 	Username  string `json:"username"`
 	ModelName string `json:"model_name"`
+	UseGroup  string `json:"use_group"`
 	Count     int64  `json:"count"`
 	Quota     int64  `json:"quota"`
 	TokenUsed int64  `json:"token_used"`
@@ -191,12 +192,18 @@ func GetAllQuotaDates(startTime int64, endTime int64, username string) (quotaDat
 	return quotaDatas, err
 }
 
-func GetUserUsageExportData(startTime int64, endTime int64) (usageData []*UserUsageExportData, err error) {
+func GetUserUsageExportData(startTime int64, endTime int64, includeUseGroup bool) (usageData []*UserUsageExportData, err error) {
 	var data []*UserUsageExportData
+	selectFields := "user_id, username, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used"
+	groupFields := "user_id, username, model_name"
+	if includeUseGroup {
+		selectFields = "user_id, username, model_name, use_group, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used"
+		groupFields = "user_id, username, model_name, use_group"
+	}
 	err = DB.Table("quota_data").
-		Select("user_id, username, model_name, sum(count) as count, sum(quota) as quota, sum(token_used) as token_used").
+		Select(selectFields).
 		Where("created_at >= ? and created_at < ?", startTime, endTime).
-		Group("user_id, username, model_name").
+		Group(groupFields).
 		Order("sum(quota) desc").
 		Find(&data).Error
 	return data, err

@@ -18,6 +18,7 @@ var userUsageExportFieldLabels = map[string]string{
 	"user_id":    "user_id",
 	"username":   "username",
 	"model_name": "model_name",
+	"use_group":  "use_group",
 	"requests":   "requests",
 	"quota":      "quota",
 	"cost_usd":   "cost_usd",
@@ -70,6 +71,8 @@ func writeUserUsageExportValue(record []string, field string, data *model.UserUs
 		return append(record, data.Username)
 	case "model_name":
 		return append(record, data.ModelName)
+	case "use_group":
+		return append(record, data.UseGroup)
 	case "requests":
 		return append(record, strconv.FormatInt(data.Count, 10))
 	case "quota":
@@ -93,7 +96,14 @@ func ExportUserUsageData(c *gin.Context) {
 		return
 	}
 	fields := parseUserUsageExportFields(c.Query("fields"))
-	usageData, err := model.GetUserUsageExportData(startTimestamp, endTimestamp)
+	includeUseGroup := false
+	for _, field := range fields {
+		if field == "use_group" {
+			includeUseGroup = true
+			break
+		}
+	}
+	usageData, err := model.GetUserUsageExportData(startTimestamp, endTimestamp, includeUseGroup)
 	if err != nil {
 		common.ApiError(c, err)
 		return
