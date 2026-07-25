@@ -214,6 +214,7 @@ export const STATIC_I18N_KEYS = [
 
   // Channel Affinity section
   'Channel Affinity',
+  'Request Interception',
 
   // Models constants
   'Exact Match',

@@ -295,6 +295,15 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "request_interception_setting.rules":
+		err = operation_setting.ValidateRequestInterceptionRulesJSON(option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "请求拦截规则设置失败: " + err.Error(),
+			})
+			return
+		}
 	case "console_setting.api_info":
 		err = console_setting.ValidateConsoleSettings(option.Value.(string), "ApiInfo")
 		if err != nil {

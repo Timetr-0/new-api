@@ -86,6 +86,13 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 		if err != nil {
 			return types.NewError(err, types.ErrorCodeReadRequestBodyFailed, types.ErrOptionWithSkipRetry())
 		}
+		requestBytes, err := storage.Bytes()
+		if err != nil {
+			return types.NewError(err, types.ErrorCodeReadRequestBodyFailed, types.ErrOptionWithSkipRetry())
+		}
+		if newAPIError := service.CheckRequestInterception(c, info, requestBytes); newAPIError != nil {
+			return newAPIError
+		}
 		requestBody = common.ReaderOnly(storage)
 	} else {
 		convertedRequest, err := adaptor.ConvertOpenAIResponsesRequest(c, info, *request)
@@ -110,6 +117,10 @@ func ResponsesHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *
 			if err != nil {
 				return newAPIErrorFromParamOverride(err)
 			}
+		}
+
+		if newAPIError := service.CheckRequestInterception(c, info, jsonData); newAPIError != nil {
+			return newAPIError
 		}
 
 		logger.LogDebug(c, "requestBody: %s", jsonData)

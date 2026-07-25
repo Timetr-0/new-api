@@ -17,6 +17,9 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { SettingsPage } from '../components/settings-page'
+import {
+  DEFAULT_REQUEST_INTERCEPTION_RULES_TEXT,
+} from '../general/request-interception/constants'
 import type { ModelSettings } from '../types'
 import {
   MODELS_DEFAULT_SECTION,
@@ -79,6 +82,8 @@ const defaultModelSettings: ModelSettings = {
   'channel_affinity_setting.max_entries': 100000,
   'channel_affinity_setting.default_ttl_seconds': 3600,
   'channel_affinity_setting.rules': '[]',
+  'request_interception_setting.enabled': true,
+  'request_interception_setting.rules': DEFAULT_REQUEST_INTERCEPTION_RULES_TEXT,
   'model_deployment.ionet.api_key': '',
   'model_deployment.ionet.enabled': false,
 }
