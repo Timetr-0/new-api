@@ -155,6 +155,10 @@ var defaultModelRatio = map[string]float64{
 	"claude-opus-4-8-high":                      2.5,
 	"claude-opus-4-8-medium":                    2.5,
 	"claude-opus-4-8-low":                       2.5,
+	"claude-fable-5":                            5.5, // AWS Bedrock in-region/geo: $11 / 1M input tokens
+	"anthropic.claude-fable-5":                  5.5, // AWS Bedrock in-region/geo: $11 / 1M input tokens
+	"us.anthropic.claude-fable-5":               5.5, // AWS Bedrock geo: $11 / 1M input tokens
+	"eu.anthropic.claude-fable-5":               5.5, // AWS Bedrock geo: $11 / 1M input tokens
 	"claude-3-opus-20240229":                    7.5, // $15 / 1M tokens
 	"claude-opus-4-20250514":                    7.5,
 	"claude-opus-4-1-20250805":                  7.5,
@@ -177,6 +181,7 @@ var defaultModelRatio = map[string]float64{
 	"global.anthropic.claude-opus-4-6-v1":                2.5,   // $5 / 1M input tokens
 	"global.anthropic.claude-opus-4-7":                   2.5,   // $5 / 1M input tokens
 	"global.anthropic.claude-opus-4-8":                   2.5,   // $5 / 1M input tokens
+	"global.anthropic.claude-fable-5":                    5,     // $10 / 1M input tokens
 	"ERNIE-4.0-8K":                              0.120 * RMB,
 	"ERNIE-3.5-8K":                              0.012 * RMB,
 	"ERNIE-3.5-8K-0205":                         0.024 * RMB,
@@ -560,7 +565,10 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 
 	if strings.Contains(name, "claude-3") {
 		return 5, true
-	} else if strings.Contains(name, "claude-sonnet-4") || strings.Contains(name, "claude-opus-4") || strings.Contains(name, "claude-haiku-4") {
+	} else if strings.Contains(name, "claude-sonnet-4") ||
+		strings.Contains(name, "claude-opus-4") ||
+		strings.Contains(name, "claude-haiku-4") ||
+		strings.Contains(name, "claude-fable-5") {
 		return 5, true
 	}
 

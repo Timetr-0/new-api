@@ -81,6 +81,10 @@ var defaultCacheRatio = map[string]float64{
 	"claude-opus-4-8-high":                0.1,
 	"claude-opus-4-8-medium":              0.1,
 	"claude-opus-4-8-low":                 0.1,
+	"claude-fable-5":                      0.1,
+	"anthropic.claude-fable-5":            0.1,
+	"us.anthropic.claude-fable-5":         0.1,
+	"eu.anthropic.claude-fable-5":         0.1,
 	"global.anthropic.claude-3-sonnet-20240229-v1:0":   0.1,
 	"global.anthropic.claude-3-opus-20240229-v1:0":     0.1,
 	"global.anthropic.claude-3-haiku-20240307-v1:0":    0.1,
@@ -98,6 +102,7 @@ var defaultCacheRatio = map[string]float64{
 	"global.anthropic.claude-opus-4-6-v1":              0.1,
 	"global.anthropic.claude-opus-4-7":                 0.1,
 	"global.anthropic.claude-opus-4-8":                 0.1,
+	"global.anthropic.claude-fable-5":                  0.1,
 }
 
 var defaultCreateCacheRatio = map[string]float64{
@@ -146,6 +151,10 @@ var defaultCreateCacheRatio = map[string]float64{
 	"claude-opus-4-8-high":                1.25,
 	"claude-opus-4-8-medium":              1.25,
 	"claude-opus-4-8-low":                 1.25,
+	"claude-fable-5":                      1.25,
+	"anthropic.claude-fable-5":            1.25,
+	"us.anthropic.claude-fable-5":         1.25,
+	"eu.anthropic.claude-fable-5":         1.25,
 	"global.anthropic.claude-3-sonnet-20240229-v1:0":   1.25,
 	"global.anthropic.claude-3-opus-20240229-v1:0":     1.25,
 	"global.anthropic.claude-3-haiku-20240307-v1:0":    1.25,
@@ -163,6 +172,7 @@ var defaultCreateCacheRatio = map[string]float64{
 	"global.anthropic.claude-opus-4-6-v1":              1.25,
 	"global.anthropic.claude-opus-4-7":                 1.25,
 	"global.anthropic.claude-opus-4-8":                 1.25,
+	"global.anthropic.claude-fable-5":                  1.25,
 }
 
 //var defaultCreateCacheRatio = map[string]float64{}
