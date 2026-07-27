@@ -68,6 +68,9 @@ const isValidJSON = (value: string | undefined) => {
 
 const createRateLimitSchema = (t: (key: string) => string) =>
   z.object({
+    GlobalApiRateLimitEnabled: z.boolean(),
+    GlobalApiRateLimitNum: z.number().min(1).max(2147483647),
+    GlobalApiRateLimitDuration: z.number().min(1).max(2147483647),
     ModelRequestRateLimitEnabled: z.boolean(),
     ModelRequestRateLimitDurationMinutes: z.number().min(0),
     ModelRequestRateLimitCount: z.number().min(0).max(100000000),
@@ -123,6 +126,106 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
             isSaving={updateOption.isPending}
             saveLabel='Save rate limits'
           />
+          <div className='space-y-1'>
+            <h3 className='text-sm font-semibold'>
+              {t('Global API rate limiting')}
+            </h3>
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Applies to all /api routes and takes effect immediately after saving.'
+              )}
+            </p>
+          </div>
+          <FormField
+            control={form.control}
+            name='GlobalApiRateLimitEnabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Enable rate limiting')}</FormLabel>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </SettingsSwitchItem>
+            )}
+          />
+
+          <div className='grid gap-4 md:grid-cols-2'>
+            <FormField
+              control={form.control}
+              name='GlobalApiRateLimitDuration'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Limit period')}</FormLabel>
+                  <FormControl>
+                    <div className='flex items-center gap-2'>
+                      <Input
+                        type='number'
+                        min={1}
+                        max={2147483647}
+                        step={1}
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(Number.parseInt(e.target.value) || 1)
+                        }
+                      />
+                      <span className='text-muted-foreground text-sm'>
+                        {t('seconds')}
+                      </span>
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    {t('Time window for rate limiting')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='GlobalApiRateLimitNum'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Max requests per period')}</FormLabel>
+                  <FormControl>
+                    <div className='flex items-center gap-2'>
+                      <Input
+                        type='number'
+                        min={1}
+                        max={2147483647}
+                        step={1}
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(Number.parseInt(e.target.value) || 1)
+                        }
+                      />
+                      <span className='text-muted-foreground text-sm'>
+                        {t('times')}
+                      </span>
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    {t('Including failed requests')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <div className='space-y-1'>
+            <h3 className='text-sm font-semibold'>
+              {t('Model request rate limiting')}
+            </h3>
+            <p className='text-muted-foreground text-xs'>
+              {t('Applies to authenticated model relay requests.')}
+            </p>
+          </div>
           <FormField
             control={form.control}
             name='ModelRequestRateLimitEnabled'
@@ -130,11 +233,6 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
               <SettingsSwitchItem>
                 <SettingsSwitchContent>
                   <FormLabel>{t('Enable rate limiting')}</FormLabel>
-                  <FormDescription>
-                    {t(
-                      'This controls model request rate limiting. Web/API route throttling is configured by environment variables and may still return 429.'
-                    )}
-                  </FormDescription>
                 </SettingsSwitchContent>
                 <FormControl>
                   <Switch
@@ -161,7 +259,7 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                         step={1}
                         {...field}
                         onChange={(e) =>
-                          field.onChange(parseInt(e.target.value) || 0)
+                          field.onChange(Number.parseInt(e.target.value) || 0)
                         }
                       />
                       <span className='text-muted-foreground text-sm'>
@@ -192,7 +290,7 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                         step={1}
                         {...field}
                         onChange={(e) =>
-                          field.onChange(parseInt(e.target.value) || 0)
+                          field.onChange(Number.parseInt(e.target.value) || 0)
                         }
                       />
                       <span className='text-muted-foreground text-sm'>
@@ -223,7 +321,7 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                         step={1}
                         {...field}
                         onChange={(e) =>
-                          field.onChange(parseInt(e.target.value) || 1)
+                          field.onChange(Number.parseInt(e.target.value) || 1)
                         }
                       />
                       <span className='text-muted-foreground text-sm'>

@@ -277,6 +277,15 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
+	case "GlobalApiRateLimitNum", "GlobalApiRateLimitDuration":
+		err = setting.CheckPositiveRateLimitValue(option.Key, option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
 	case "AutomaticDisableStatusCodes":
 		_, err = operation_setting.ParseHTTPStatusCodeRanges(option.Value.(string))
 		if err != nil {

@@ -6,10 +6,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
+	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
@@ -47,9 +49,93 @@ func CheckRequestInterception(c *gin.Context, info *relaycommon.RelayInfo, reque
 		if c != nil {
 			logger.LogWarn(c, fmt.Sprintf("request intercepted by rule %q: %s", rule.Name, rule.Error.Message))
 		}
-		return newRequestInterceptionError(rule)
+		newAPIError := newRequestInterceptionError(rule)
+		recordRequestInterceptionWarningLog(c, info, ctx, rule, newAPIError)
+		return newAPIError
 	}
 	return nil
+}
+
+func recordRequestInterceptionWarningLog(c *gin.Context, info *relaycommon.RelayInfo, ctx requestInterceptionContext, rule operation_setting.RequestInterceptionRule, newAPIError *types.NewAPIError) {
+	if c == nil || model.LOG_DB == nil {
+		return
+	}
+
+	userId := common.GetContextKeyInt(c, constant.ContextKeyUserId)
+	if userId == 0 && info != nil {
+		userId = info.UserId
+	}
+	if userId == 0 {
+		return
+	}
+	tokenId := common.GetContextKeyInt(c, constant.ContextKeyTokenId)
+	if tokenId == 0 && info != nil {
+		tokenId = info.TokenId
+	}
+	tokenName := c.GetString("token_name")
+	modelName := ctx.OriginModel
+	if modelName == "" {
+		modelName = common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
+	}
+	if modelName == "" && info != nil {
+		modelName = info.OriginModelName
+	}
+	group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	if group == "" {
+		group = common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
+	}
+	if group == "" && info != nil {
+		group = info.UsingGroup
+	}
+	if group == "" && info != nil {
+		group = info.TokenGroup
+	}
+
+	startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
+	if startTime.IsZero() {
+		startTime = time.Now()
+	}
+	useTimeSeconds := int(time.Since(startTime).Seconds())
+	content := newAPIError.MaskSensitiveErrorWithStatusCode()
+	if content == "" {
+		content = fmt.Sprintf("request intercepted by rule %q", rule.Name)
+	}
+
+	other := map[string]interface{}{
+		"reject_reason":     content,
+		"interception_rule": rule.Name,
+		"error_type":        newAPIError.GetErrorType(),
+		"error_code":        newAPIError.GetErrorCode(),
+		"status_code":       newAPIError.StatusCode,
+		"channel_id":        ctx.ChannelID,
+		"channel_name":      ctx.ChannelName,
+		"channel_type":      ctx.ChannelType,
+	}
+	if ctx.Path != "" {
+		other["request_path"] = ctx.Path
+	}
+	conversionChain := make([]string, 0, 2)
+	if ctx.RelayFormat != "" {
+		conversionChain = append(conversionChain, ctx.RelayFormat)
+	}
+	if ctx.FinalRelayFormat != "" && ctx.FinalRelayFormat != ctx.RelayFormat {
+		conversionChain = append(conversionChain, ctx.FinalRelayFormat)
+	}
+	if len(conversionChain) > 0 {
+		other["request_conversion"] = conversionChain
+	}
+
+	adminInfo := map[string]interface{}{
+		"use_channel": c.GetStringSlice("use_channel"),
+	}
+	if common.GetContextKeyBool(c, constant.ContextKeyChannelIsMultiKey) {
+		adminInfo["is_multi_key"] = true
+		adminInfo["multi_key_index"] = common.GetContextKeyInt(c, constant.ContextKeyChannelMultiKeyIndex)
+	}
+	AppendChannelAffinityAdminInfo(c, adminInfo)
+	other["admin_info"] = adminInfo
+
+	model.RecordWarningLog(c, userId, ctx.ChannelID, modelName, tokenName, content, tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), group, other)
 }
 
 func buildRequestInterceptionContext(c *gin.Context, info *relaycommon.RelayInfo) requestInterceptionContext {

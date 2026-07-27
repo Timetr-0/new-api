@@ -63,6 +63,7 @@ import {
   isPerCallBilling,
   isTimingLogType,
 } from '../../lib/utils'
+import { LOG_TYPE_ENUM } from '../../constants'
 import { USAGE_BILLING_PATH, type LogOtherData } from '../../types'
 
 // Maps a channel-update changed-field token (as recorded by the backend audit)
@@ -112,17 +113,32 @@ function DetailSection(props: {
   icon?: React.ReactNode
   iconTone?: IconBadgeTone
   label: string
-  variant?: 'default' | 'danger'
+  variant?: 'default' | 'danger' | 'warning'
   children: React.ReactNode
 }) {
   const isDanger = props.variant === 'danger'
-  const iconTone = isDanger ? 'destructive' : props.iconTone
+  const isWarning = props.variant === 'warning'
+  let iconTone = props.iconTone
+  if (isDanger) {
+    iconTone = 'destructive'
+  } else if (isWarning) {
+    iconTone = 'warning'
+  }
+  let sectionClassName = 'bg-muted/30'
+  if (isDanger) {
+    sectionClassName =
+      'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20'
+  } else if (isWarning) {
+    sectionClassName =
+      'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20'
+  }
   return (
     <div className='min-w-0 space-y-1.5'>
       <Label
         className={cn(
           'flex items-center gap-1.5 text-xs font-semibold',
-          isDanger && 'text-red-500'
+          isDanger && 'text-red-500',
+          isWarning && 'text-amber-600'
         )}
       >
         {props.icon && (
@@ -135,9 +151,7 @@ function DetailSection(props: {
       <div
         className={cn(
           'min-w-0 space-y-1 overflow-hidden rounded-md border p-2.5 max-sm:p-2',
-          isDanger
-            ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/20'
-            : 'bg-muted/30'
+          sectionClassName
         )}
       >
         {props.children}
@@ -468,6 +482,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const isConsume = props.log.type === 2
   const isTopup = props.log.type === 1
   const isManage = props.log.type === 3
+  const isWarning = props.log.type === LOG_TYPE_ENUM.WARNING
   const isSubscription = other?.billing_source === 'subscription'
   const isTieredBilling =
     isConsume &&
@@ -800,7 +815,7 @@ export function DetailsDialog(props: DetailsDialogProps) {
           <DetailSection
             icon={<AlertTriangle className='size-3.5' aria-hidden='true' />}
             label={t('Reject Reason')}
-            variant='danger'
+            variant={isWarning ? 'warning' : 'danger'}
           >
             <p className='text-xs wrap-break-word'>{other.reject_reason}</p>
           </DetailSection>

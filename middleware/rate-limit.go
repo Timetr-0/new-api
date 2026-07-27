@@ -95,10 +95,22 @@ func GlobalWebRateLimit() func(c *gin.Context) {
 }
 
 func GlobalAPIRateLimit() func(c *gin.Context) {
-	if common.GlobalApiRateLimitEnable {
-		return rateLimitFactory(common.GlobalApiRateLimitNum, common.GlobalApiRateLimitDuration, "GA")
+	inMemoryRateLimiter.Init(common.RateLimitKeyExpirationDuration)
+	return func(c *gin.Context) {
+		if !common.GlobalApiRateLimitEnable {
+			return
+		}
+		maxRequestNum := common.GlobalApiRateLimitNum
+		duration := common.GlobalApiRateLimitDuration
+		if maxRequestNum <= 0 || duration <= 0 {
+			return
+		}
+		if common.RedisEnabled {
+			redisRateLimiter(c, maxRequestNum, duration, "GA")
+			return
+		}
+		memoryRateLimiter(c, maxRequestNum, duration, "GA")
 	}
-	return defNext
 }
 
 func CriticalRateLimit() func(c *gin.Context) {

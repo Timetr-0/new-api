@@ -1,9 +1,10 @@
 package setting
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
@@ -20,7 +21,7 @@ func ModelRequestRateLimitGroup2JSONString() string {
 	ModelRequestRateLimitMutex.RLock()
 	defer ModelRequestRateLimitMutex.RUnlock()
 
-	jsonBytes, err := json.Marshal(ModelRequestRateLimitGroup)
+	jsonBytes, err := common.Marshal(ModelRequestRateLimitGroup)
 	if err != nil {
 		common.SysLog("error marshalling model ratio: " + err.Error())
 	}
@@ -28,11 +29,16 @@ func ModelRequestRateLimitGroup2JSONString() string {
 }
 
 func UpdateModelRequestRateLimitGroupByJSONString(jsonStr string) error {
-	ModelRequestRateLimitMutex.RLock()
-	defer ModelRequestRateLimitMutex.RUnlock()
+	nextModelRequestRateLimitGroup := make(map[string][2]int)
+	if err := common.Unmarshal([]byte(jsonStr), &nextModelRequestRateLimitGroup); err != nil {
+		return err
+	}
 
-	ModelRequestRateLimitGroup = make(map[string][2]int)
-	return json.Unmarshal([]byte(jsonStr), &ModelRequestRateLimitGroup)
+	ModelRequestRateLimitMutex.Lock()
+	defer ModelRequestRateLimitMutex.Unlock()
+
+	ModelRequestRateLimitGroup = nextModelRequestRateLimitGroup
+	return nil
 }
 
 func GetGroupRateLimit(group string) (totalCount, successCount int, found bool) {
@@ -52,7 +58,7 @@ func GetGroupRateLimit(group string) (totalCount, successCount int, found bool) 
 
 func CheckModelRequestRateLimitGroup(jsonStr string) error {
 	checkModelRequestRateLimitGroup := make(map[string][2]int)
-	err := json.Unmarshal([]byte(jsonStr), &checkModelRequestRateLimitGroup)
+	err := common.Unmarshal([]byte(jsonStr), &checkModelRequestRateLimitGroup)
 	if err != nil {
 		return err
 	}
@@ -65,5 +71,16 @@ func CheckModelRequestRateLimitGroup(jsonStr string) error {
 		}
 	}
 
+	return nil
+}
+
+func CheckPositiveRateLimitValue(name string, raw string) error {
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return fmt.Errorf("%s must be a positive integer", name)
+	}
+	if value < 1 || value > math.MaxInt32 {
+		return fmt.Errorf("%s must be between 1 and 2147483647", name)
+	}
 	return nil
 }

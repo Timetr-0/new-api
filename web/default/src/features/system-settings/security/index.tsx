@@ -25,6 +25,9 @@ import {
 } from './section-registry.tsx'
 
 const defaultSecuritySettings: SecuritySettings = {
+  GlobalApiRateLimitEnabled: true,
+  GlobalApiRateLimitNum: 360,
+  GlobalApiRateLimitDuration: 180,
   ModelRequestRateLimitEnabled: false,
   ModelRequestRateLimitCount: 0,
   ModelRequestRateLimitSuccessCount: 1000,
