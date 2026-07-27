@@ -89,6 +89,31 @@ DEFAULT_ACCESSIBLE_REGIONS = [
     # "ap-east-2",      # 亚太（台北），中国台湾
 ]
 
+DEFAULT_REGION_WEIGHT_TEMPLATES: dict[str, dict[str, int]] = {
+    "us-first": {
+        "eu-central-1": 50,
+        "us-west-1": 80,
+        "us-west-2": 100,
+        "eu-north-1": 40,
+        "eu-west-3": 50,
+        "eu-west-2": 60,
+        "eu-west-1": 60,
+        "us-east-1": 100,
+        "us-east-2": 80,
+    },
+    "eu-first": {
+        "eu-central-1": 100,
+        "us-west-1": 40,
+        "us-west-2": 50,
+        "eu-north-1": 70,
+        "eu-west-3": 80,
+        "eu-west-2": 90,
+        "eu-west-1": 100,
+        "us-east-1": 50,
+        "us-east-2": 40,
+    },
+}
+
 AWS_CLAUDE_PRESET_MODELS = [
     "claude-3-sonnet-20240229",
     "claude-3-opus-20240229",
@@ -212,7 +237,7 @@ def build_payload(
         "group": args.group,
         "model_mapping": model_mapping,
         "priority": args.priority,
-        "weight": args.weight,
+        "weight": resolve_region_weight(args, region),
         "test_model": args.test_model or None,
         "auto_ban": args.auto_ban,
         "status": args.status,
@@ -239,6 +264,24 @@ def build_payload(
         "other": "",
     }
     return {"mode": "single", "channel": channel}
+
+
+def resolve_region_weight(args: argparse.Namespace, region: str) -> int:
+    if args.weight_template == "none":
+        return args.weight
+    return DEFAULT_REGION_WEIGHT_TEMPLATES[args.weight_template].get(region, args.weight)
+
+
+def validate_default_weight_templates() -> None:
+    for template_name, template in DEFAULT_REGION_WEIGHT_TEMPLATES.items():
+        missing_regions = [
+            region for region in DEFAULT_ACCESSIBLE_REGIONS if region not in template
+        ]
+        if missing_regions:
+            raise RuntimeError(
+                f"weight template {template_name!r} missing default regions: "
+                + ", ".join(missing_regions)
+            )
 
 
 def build_channel_key(args: argparse.Namespace, region: str, session_name: str) -> str:
@@ -588,6 +631,12 @@ def main() -> int:
     parser.add_argument("--model-mapping", help="JSON object string. Overrides preset mapping.")
     parser.add_argument("--priority", type=int, default=0)
     parser.add_argument("--weight", type=int, default=0)
+    parser.add_argument(
+        "--weight-template",
+        choices=["none", *sorted(DEFAULT_REGION_WEIGHT_TEMPLATES)],
+        default=os.getenv("AWS_BEDROCK_WEIGHT_TEMPLATE", "none"),
+        help="Preset per-region channel weights; --weight is used as fallback for regions outside the template.",
+    )
     parser.add_argument("--status", type=int, choices=[1, 2, 3], default=1)
     parser.add_argument("--auto-ban", type=int, choices=[0, 1], default=1)
     parser.add_argument("--tag", default="")
@@ -603,6 +652,15 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--continue-on-error", action="store_true")
     args = parser.parse_args()
+    if (
+        args.weight_template != "none"
+        and args.weight_template not in DEFAULT_REGION_WEIGHT_TEMPLATES
+    ):
+        parser.error(
+            "--weight-template/AWS_BEDROCK_WEIGHT_TEMPLATE must be one of: "
+            + ", ".join(["none", *sorted(DEFAULT_REGION_WEIGHT_TEMPLATES)])
+        )
+    validate_default_weight_templates()
 
     missing = []
     if not args.base_url:
