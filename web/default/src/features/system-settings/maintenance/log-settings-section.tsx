@@ -80,12 +80,13 @@ import type { LogCleanupTask } from '../types'
 
 const logSettingsSchema = z.object({
   LogConsumeEnabled: z.boolean(),
+  TrainingDataRecordEnabled: z.boolean(),
 })
 
 type LogSettingsFormValues = z.infer<typeof logSettingsSchema>
 
 type LogSettingsSectionProps = {
-  defaultEnabled: boolean
+  defaultValues: LogSettingsFormValues
 }
 
 type ServerLogInfo = {
@@ -140,15 +141,15 @@ function isActiveLogCleanupTask(task: LogCleanupTask | null) {
 }
 
 export function LogSettingsSection({
-  defaultEnabled,
+  defaultValues,
 }: LogSettingsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const logConsumeDefault = defaultValues.LogConsumeEnabled
+  const trainingDataRecordDefault = defaultValues.TrainingDataRecordEnabled
   const form = useForm<LogSettingsFormValues>({
     resolver: zodResolver(logSettingsSchema),
-    defaultValues: {
-      LogConsumeEnabled: defaultEnabled,
-    },
+    defaultValues,
   })
 
   const [purgeDate, setPurgeDate] = useState<Date | undefined>(() =>
@@ -174,8 +175,11 @@ export function LogSettingsSection({
   }, [])
 
   useEffect(() => {
-    form.reset({ LogConsumeEnabled: defaultEnabled })
-  }, [defaultEnabled, form])
+    form.reset({
+      LogConsumeEnabled: logConsumeDefault,
+      TrainingDataRecordEnabled: trainingDataRecordDefault,
+    })
+  }, [form, logConsumeDefault, trainingDataRecordDefault])
 
   useEffect(() => {
     fetchServerLogInfo()
@@ -257,11 +261,18 @@ export function LogSettingsSection({
   }, [logCleanupActive, logCleanupTaskId, t])
 
   const onSubmit = async (values: LogSettingsFormValues) => {
-    if (values.LogConsumeEnabled === defaultEnabled) return
-    await updateOption.mutateAsync({
-      key: 'LogConsumeEnabled',
-      value: values.LogConsumeEnabled,
-    })
+    const currentDefaults: LogSettingsFormValues = {
+      LogConsumeEnabled: logConsumeDefault,
+      TrainingDataRecordEnabled: trainingDataRecordDefault,
+    }
+    const updates = Object.entries(values).filter(
+      ([key, value]) =>
+        value !== currentDefaults[key as keyof LogSettingsFormValues]
+    )
+
+    for (const [key, value] of updates) {
+      await updateOption.mutateAsync({ key, value })
+    }
   }
 
   const handleRequestCleanLogs = () => {
@@ -353,6 +364,34 @@ export function LogSettingsSection({
                   <FormDescription>
                     {t(
                       'Track per-request consumption to power usage analytics. Keeping this on increases database writes.'
+                    )}
+                  </FormDescription>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </SettingsSwitchItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name='TrainingDataRecordEnabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Record Claude training data')}</FormLabel>
+                  <FormDescription>
+                    {t(
+                      'Save successful Claude request and response context to JSONL files for offline training.'
+                    )}
+                  </FormDescription>
+                  <FormDescription>
+                    {t(
+                      'Files are written under /data/training-capture/ as six-hour .jsonl batches.'
                     )}
                   </FormDescription>
                 </SettingsSwitchContent>

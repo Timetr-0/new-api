@@ -226,6 +226,7 @@ func doAwsClientRequest(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor,
 			if err != nil {
 				return nil, types.NewError(errors.Wrap(err, "marshal aws request fail"), types.ErrorCodeBadRequestBody)
 			}
+			service.SetTrainingDataRecordRequest(c, info, awsReq.Body)
 			a.AwsReq = awsReq
 			return nil, nil
 		} else {
@@ -238,6 +239,7 @@ func doAwsClientRequest(c *gin.Context, info *relaycommon.RelayInfo, a *Adaptor,
 			if err != nil {
 				return nil, types.NewError(errors.Wrap(err, "marshal aws request fail"), types.ErrorCodeBadRequestBody)
 			}
+			service.SetTrainingDataRecordRequest(c, info, awsReq.Body)
 			a.AwsReq = awsReq
 			return nil, nil
 		}

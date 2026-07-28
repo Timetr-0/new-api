@@ -149,6 +149,7 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 			return newApiErr
 		}
 
+		service.EnqueueTrainingDataRecord(c, info)
 		service.PostTextConsumeQuota(c, info, usage, nil)
 		return nil
 	}
@@ -166,6 +167,7 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		if newAPIError := service.CheckRequestInterception(c, info, requestBytes); newAPIError != nil {
 			return newAPIError
 		}
+		service.SetTrainingDataRecordRequest(c, info, requestBytes)
 		info.UpstreamRequestBodySize = storage.Size()
 		requestBody = common.ReaderOnly(storage)
 	} else {
@@ -197,6 +199,7 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 			return newAPIError
 		}
 
+		service.SetTrainingDataRecordRequest(c, info, jsonData)
 		logger.LogDebug(c, "requestBody: %s", jsonData)
 		body, size, closer, err := relaycommon.NewOutboundJSONBody(jsonData)
 		if err != nil {
@@ -233,6 +236,8 @@ func ClaudeHelper(c *gin.Context, info *relaycommon.RelayInfo) (newAPIError *typ
 		return newAPIError
 	}
 
-	service.PostTextConsumeQuota(c, info, usage.(*dto.Usage), nil)
+	usageDto := usage.(*dto.Usage)
+	service.EnqueueTrainingDataRecord(c, info)
+	service.PostTextConsumeQuota(c, info, usageDto, nil)
 	return nil
 }
