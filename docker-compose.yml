@@ -16,14 +16,18 @@ version: '3.4' # For compatibility with older Docker versions
 
 services:
   new-api:
-    image: calciumion/new-api:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: new-api-local:latest
     container_name: new-api
     restart: always
     command: --log-dir /app/logs
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/data
+      - /data/new-api:/data
+      - /data/training-capture:/data/training-capture
       - ./logs:/app/logs
     environment:
       - SQL_DSN=postgresql://root:123456@postgres:5432/new-api # ⚠️ IMPORTANT: Change the password in production!
