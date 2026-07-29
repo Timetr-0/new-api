@@ -277,8 +277,26 @@ func UpdateOption(c *gin.Context) {
 			})
 			return
 		}
-	case "GlobalApiRateLimitNum", "GlobalApiRateLimitDuration":
+	case "GlobalApiRateLimitNum", "ModelRequestRateLimitSuccessCount":
 		err = setting.CheckPositiveRateLimitValue(option.Key, option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	case "ModelRequestRateLimitCount":
+		err = setting.CheckOptionalRateLimitValue(option.Key, option.Value.(string))
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": err.Error(),
+			})
+			return
+		}
+	case "GlobalApiRateLimitDuration":
+		err = setting.CheckPositiveRateLimitIntegerValue(option.Key, option.Value.(string))
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,

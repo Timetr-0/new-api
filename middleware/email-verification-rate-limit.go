@@ -13,11 +13,30 @@ import (
 
 const (
 	EmailVerificationRateLimitMark = "EV"
-	EmailVerificationMaxRequests   = 2  // 30秒内最多2次
 	EmailVerificationDuration      = 30 // 30秒时间窗口
 )
 
+var (
+	EmailVerificationMaxRequestsSpec = common.GetRateLimitSpecEnvOrDefault("EMAIL_VERIFICATION_RATE_LIMIT", "2", false)
+	EmailVerificationMaxRequests     = common.RateLimitSpecBaseValue(EmailVerificationMaxRequestsSpec, 2) // 30秒内最多2次
+)
+
+func resolveEmailVerificationMaxRequests(c *gin.Context) (int, bool) {
+	maxRequests, err := common.ResolveRateLimitSpec(EmailVerificationRateLimitMark, EmailVerificationMaxRequestsSpec, false)
+	if err != nil {
+		fmt.Println(err.Error())
+		c.Status(http.StatusInternalServerError)
+		c.Abort()
+		return 0, false
+	}
+	return maxRequests, true
+}
+
 func redisEmailVerificationRateLimiter(c *gin.Context) {
+	maxRequests, ok := resolveEmailVerificationMaxRequests(c)
+	if !ok {
+		return
+	}
 	ctx := context.Background()
 	rdb := common.RDB
 	key := "emailVerification:" + EmailVerificationRateLimitMark + ":" + c.ClientIP()
@@ -35,7 +54,7 @@ func redisEmailVerificationRateLimiter(c *gin.Context) {
 	}
 
 	// 检查是否超出限制
-	if count <= int64(EmailVerificationMaxRequests) {
+	if count <= int64(maxRequests) {
 		c.Next()
 		return
 	}
@@ -55,9 +74,13 @@ func redisEmailVerificationRateLimiter(c *gin.Context) {
 }
 
 func memoryEmailVerificationRateLimiter(c *gin.Context) {
+	maxRequests, ok := resolveEmailVerificationMaxRequests(c)
+	if !ok {
+		return
+	}
 	key := EmailVerificationRateLimitMark + ":" + c.ClientIP()
 
-	if !inMemoryRateLimiter.Request(key, EmailVerificationMaxRequests, EmailVerificationDuration) {
+	if !inMemoryRateLimiter.Request(key, maxRequests, EmailVerificationDuration) {
 		c.JSON(http.StatusTooManyRequests, gin.H{
 			"success": false,
 			"message": "发送过于频繁，请稍后再试",

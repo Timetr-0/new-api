@@ -223,25 +223,31 @@ var (
 var (
 	GlobalApiRateLimitEnable   bool
 	GlobalApiRateLimitNum      int
+	GlobalApiRateLimitNumSpec  string
 	GlobalApiRateLimitDuration int64
 
 	GlobalWebRateLimitEnable   bool
 	GlobalWebRateLimitNum      int
+	GlobalWebRateLimitNumSpec  string
 	GlobalWebRateLimitDuration int64
 
 	CriticalRateLimitEnable   bool
 	CriticalRateLimitNum            = 20
+	CriticalRateLimitNumSpec        = "20"
 	CriticalRateLimitDuration int64 = 20 * 60
 
 	UploadRateLimitNum            = 10
+	UploadRateLimitNumSpec        = "10"
 	UploadRateLimitDuration int64 = 60
 
 	DownloadRateLimitNum            = 10
+	DownloadRateLimitNumSpec        = "10"
 	DownloadRateLimitDuration int64 = 60
 
 	// Per-user search rate limit (applies after authentication, keyed by user ID)
 	SearchRateLimitEnable         = true
 	SearchRateLimitNum            = 10
+	SearchRateLimitNumSpec        = "10"
 	SearchRateLimitDuration int64 = 60
 )
 

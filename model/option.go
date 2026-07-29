@@ -137,11 +137,11 @@ func InitOptionMap() {
 	common.OptionMap["QuotaRemindThreshold"] = strconv.Itoa(common.QuotaRemindThreshold)
 	common.OptionMap["PreConsumedQuota"] = strconv.Itoa(common.PreConsumedQuota)
 	common.OptionMap["GlobalApiRateLimitEnabled"] = strconv.FormatBool(common.GlobalApiRateLimitEnable)
-	common.OptionMap["GlobalApiRateLimitNum"] = strconv.Itoa(common.GlobalApiRateLimitNum)
+	common.OptionMap["GlobalApiRateLimitNum"] = common.GlobalApiRateLimitNumSpec
 	common.OptionMap["GlobalApiRateLimitDuration"] = strconv.FormatInt(common.GlobalApiRateLimitDuration, 10)
-	common.OptionMap["ModelRequestRateLimitCount"] = strconv.Itoa(setting.ModelRequestRateLimitCount)
+	common.OptionMap["ModelRequestRateLimitCount"] = setting.ModelRequestRateLimitCountSpec
 	common.OptionMap["ModelRequestRateLimitDurationMinutes"] = strconv.Itoa(setting.ModelRequestRateLimitDurationMinutes)
-	common.OptionMap["ModelRequestRateLimitSuccessCount"] = strconv.Itoa(setting.ModelRequestRateLimitSuccessCount)
+	common.OptionMap["ModelRequestRateLimitSuccessCount"] = setting.ModelRequestRateLimitSuccessCountSpec
 	common.OptionMap["ModelRequestRateLimitGroup"] = setting.ModelRequestRateLimitGroup2JSONString()
 	common.OptionMap["ModelRatio"] = ratio_setting.ModelRatio2JSONString()
 	common.OptionMap["ModelPrice"] = ratio_setting.ModelPrice2JSONString()
@@ -519,16 +519,19 @@ func updateOptionMap(key string, value string) (err error) {
 	case "PreConsumedQuota":
 		common.PreConsumedQuota, _ = strconv.Atoi(value)
 	case "GlobalApiRateLimitNum":
-		common.GlobalApiRateLimitNum, _ = strconv.Atoi(value)
+		common.GlobalApiRateLimitNumSpec = value
+		common.GlobalApiRateLimitNum = common.RateLimitSpecBaseValue(value, common.GlobalApiRateLimitNum)
 	case "GlobalApiRateLimitDuration":
 		duration, _ := strconv.Atoi(value)
 		common.GlobalApiRateLimitDuration = int64(duration)
 	case "ModelRequestRateLimitCount":
-		setting.ModelRequestRateLimitCount, _ = strconv.Atoi(value)
+		setting.ModelRequestRateLimitCountSpec = value
+		setting.ModelRequestRateLimitCount = common.RateLimitSpecBaseValue(value, setting.ModelRequestRateLimitCount)
 	case "ModelRequestRateLimitDurationMinutes":
 		setting.ModelRequestRateLimitDurationMinutes, _ = strconv.Atoi(value)
 	case "ModelRequestRateLimitSuccessCount":
-		setting.ModelRequestRateLimitSuccessCount, _ = strconv.Atoi(value)
+		setting.ModelRequestRateLimitSuccessCountSpec = value
+		setting.ModelRequestRateLimitSuccessCount = common.RateLimitSpecBaseValue(value, setting.ModelRequestRateLimitSuccessCount)
 	case "ModelRequestRateLimitGroup":
 		err = setting.UpdateModelRequestRateLimitGroupByJSONString(value)
 	case "RetryTimes":

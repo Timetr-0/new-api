@@ -56,9 +56,8 @@ const isValidJSON = (value: string | undefined) => {
     }
     for (const [, val] of Object.entries(parsed)) {
       if (!Array.isArray(val) || val.length !== 2) return false
-      if (typeof val[0] !== 'number' || typeof val[1] !== 'number') return false
-      if (val[0] < 0 || val[1] < 1) return false
-      if (val[0] > 2147483647 || val[1] > 2147483647) return false
+      if (!isValidRateLimitSpec(val[0], true)) return false
+      if (!isValidRateLimitSpec(val[1], false)) return false
     }
     return true
   } catch {
@@ -66,15 +65,66 @@ const isValidJSON = (value: string | undefined) => {
   }
 }
 
+const rateLimitSpecRegex =
+  /^N\(\s*(?:(?:mean|mu)\s*=\s*)?\d+(?:\.\d+)?\s*,\s*(?:(?:std|stddev|sigma)\s*=\s*)?\d+(?:\.\d+)?\s*\)$/i
+
+const isValidRateLimitSpec = (value: unknown, allowZero: boolean) => {
+  const text =
+    typeof value === 'number'
+      ? String(value)
+      : typeof value === 'string'
+        ? value.trim()
+        : ''
+  if (text === '') return false
+
+  const parsed = Number(text)
+  if (Number.isInteger(parsed)) {
+    return parsed <= 2147483647 && (allowZero ? parsed >= 0 : parsed >= 1)
+  }
+
+  if (!rateLimitSpecRegex.test(text)) return false
+  const [, body] = text.match(/^N\((.*)\)$/i) ?? []
+  if (!body) return false
+  const values = body.split(',').map((part) => part.trim())
+  const meanText = values[0].includes('=')
+    ? values[0].split('=')[1]?.trim()
+    : values[0]
+  const stdText = values[1]?.includes('=')
+    ? values[1].split('=')[1]?.trim()
+    : values[1]
+  const mean = Number(meanText)
+  const std = Number(stdText)
+  return (
+    Number.isFinite(mean) &&
+    Number.isFinite(std) &&
+    mean >= 1 &&
+    mean <= 2147483647 &&
+    std >= 0 &&
+    std <= 2147483647
+  )
+}
+
 const createRateLimitSchema = (t: (key: string) => string) =>
   z.object({
     GlobalApiRateLimitEnabled: z.boolean(),
-    GlobalApiRateLimitNum: z.number().min(1).max(2147483647),
+    GlobalApiRateLimitNum: z
+      .string()
+      .refine((value) => isValidRateLimitSpec(value, false), {
+        message: t('Invalid JSON format or values out of allowed range'),
+      }),
     GlobalApiRateLimitDuration: z.number().min(1).max(2147483647),
     ModelRequestRateLimitEnabled: z.boolean(),
     ModelRequestRateLimitDurationMinutes: z.number().min(0),
-    ModelRequestRateLimitCount: z.number().min(0).max(100000000),
-    ModelRequestRateLimitSuccessCount: z.number().min(1).max(100000000),
+    ModelRequestRateLimitCount: z
+      .string()
+      .refine((value) => isValidRateLimitSpec(value, true), {
+        message: t('Invalid JSON format or values out of allowed range'),
+      }),
+    ModelRequestRateLimitSuccessCount: z
+      .string()
+      .refine((value) => isValidRateLimitSpec(value, false), {
+        message: t('Invalid JSON format or values out of allowed range'),
+      }),
     ModelRequestRateLimitGroup: z
       .string()
       .optional()
@@ -195,14 +245,9 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                   <FormControl>
                     <div className='flex items-center gap-2'>
                       <Input
-                        type='number'
-                        min={1}
-                        max={2147483647}
-                        step={1}
+                        type='text'
+                        placeholder='N(700,std=100)'
                         {...field}
-                        onChange={(e) =>
-                          field.onChange(Number.parseInt(e.target.value) || 1)
-                        }
                       />
                       <span className='text-muted-foreground text-sm'>
                         {t('times')}
@@ -284,14 +329,9 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                   <FormControl>
                     <div className='flex items-center gap-2'>
                       <Input
-                        type='number'
-                        min={0}
-                        max={100000000}
-                        step={1}
+                        type='text'
+                        placeholder='N(700,std=100)'
                         {...field}
-                        onChange={(e) =>
-                          field.onChange(Number.parseInt(e.target.value) || 0)
-                        }
                       />
                       <span className='text-muted-foreground text-sm'>
                         {t('times')}
@@ -315,14 +355,9 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                   <FormControl>
                     <div className='flex items-center gap-2'>
                       <Input
-                        type='number'
-                        min={1}
-                        max={100000000}
-                        step={1}
+                        type='text'
+                        placeholder='N(700,std=100)'
                         {...field}
-                        onChange={(e) =>
-                          field.onChange(Number.parseInt(e.target.value) || 1)
-                        }
                       />
                       <span className='text-muted-foreground text-sm'>
                         {t('times')}

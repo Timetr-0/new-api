@@ -174,8 +174,8 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 
 		// 计算限流参数
 		duration := int64(setting.ModelRequestRateLimitDurationMinutes * 60)
-		totalMaxCount := setting.ModelRequestRateLimitCount
-		successMaxCount := setting.ModelRequestRateLimitSuccessCount
+		totalMaxCountSpec := setting.ModelRequestRateLimitCountSpec
+		successMaxCountSpec := setting.ModelRequestRateLimitSuccessCountSpec
 
 		// 获取分组
 		group := common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
@@ -184,10 +184,23 @@ func ModelRequestRateLimit() func(c *gin.Context) {
 		}
 
 		//获取分组的限流配置
-		groupTotalCount, groupSuccessCount, found := setting.GetGroupRateLimit(group)
+		groupTotalCountSpec, groupSuccessCountSpec, found := setting.GetGroupRateLimit(group)
 		if found {
-			totalMaxCount = groupTotalCount
-			successMaxCount = groupSuccessCount
+			totalMaxCountSpec = groupTotalCountSpec
+			successMaxCountSpec = groupSuccessCountSpec
+		}
+
+		totalMaxCount, err := common.ResolveRateLimitSpec("MRRL:"+group, totalMaxCountSpec, true)
+		if err != nil {
+			fmt.Println("解析总请求数限制失败:", err.Error())
+			abortWithOpenAiMessage(c, http.StatusInternalServerError, "rate_limit_check_failed")
+			return
+		}
+		successMaxCount, err := common.ResolveRateLimitSpec("MRRLS:"+group, successMaxCountSpec, false)
+		if err != nil {
+			fmt.Println("解析成功请求数限制失败:", err.Error())
+			abortWithOpenAiMessage(c, http.StatusInternalServerError, "rate_limit_check_failed")
+			return
 		}
 
 		// 根据存储类型选择并执行限流处理器

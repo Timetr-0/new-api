@@ -35,16 +35,46 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 
+const rateLimitSpecRegex =
+  /^N\(\s*(?:(?:mean|mu)\s*=\s*)?\d+(?:\.\d+)?\s*,\s*(?:(?:std|stddev|sigma)\s*=\s*)?\d+(?:\.\d+)?\s*\)$/i
+
+const isValidRateLimitSpec = (value: string, allowZero: boolean) => {
+  const text = value.trim()
+  if (text === '') return false
+  const parsed = Number(text)
+  if (Number.isInteger(parsed)) {
+    return parsed <= 2147483647 && (allowZero ? parsed >= 0 : parsed >= 1)
+  }
+  if (!rateLimitSpecRegex.test(text)) return false
+  const [, body] = text.match(/^N\((.*)\)$/i) ?? []
+  if (!body) return false
+  const values = body.split(',').map((part) => part.trim())
+  const meanText = values[0].includes('=')
+    ? values[0].split('=')[1]?.trim()
+    : values[0]
+  const stdText = values[1]?.includes('=')
+    ? values[1].split('=')[1]?.trim()
+    : values[1]
+  const mean = Number(meanText)
+  const std = Number(stdText)
+  return (
+    Number.isFinite(mean) &&
+    Number.isFinite(std) &&
+    mean >= 1 &&
+    mean <= 2147483647 &&
+    std >= 0 &&
+    std <= 2147483647
+  )
+}
+
 const rateLimitDialogSchema = z.object({
   groupName: z.string().min(1, 'Group name is required'),
-  maxRequests: z
-    .number()
-    .min(0, 'Must be ≥ 0')
-    .max(2147483647, 'Must be ≤ 2,147,483,647'),
-  maxSuccess: z
-    .number()
-    .min(1, 'Must be ≥ 1')
-    .max(2147483647, 'Must be ≤ 2,147,483,647'),
+  maxRequests: z.string().refine((value) => isValidRateLimitSpec(value, true), {
+    message: 'Must be ≥ 0',
+  }),
+  maxSuccess: z.string().refine((value) => isValidRateLimitSpec(value, false), {
+    message: 'Must be ≥ 1',
+  }),
 })
 
 type RateLimitDialogFormValues = z.infer<typeof rateLimitDialogSchema>
@@ -53,8 +83,8 @@ const RATE_LIMIT_FORM_ID = 'rate-limit-form'
 
 export type RateLimitEntryData = {
   groupName: string
-  maxRequests: number
-  maxSuccess: number
+  maxRequests: string
+  maxSuccess: string
 }
 
 type RateLimitDialogProps = {
@@ -77,8 +107,8 @@ export function RateLimitDialog({
     resolver: zodResolver(rateLimitDialogSchema),
     defaultValues: {
       groupName: '',
-      maxRequests: 0,
-      maxSuccess: 1,
+      maxRequests: '0',
+      maxSuccess: '1',
     },
   })
 
@@ -88,8 +118,8 @@ export function RateLimitDialog({
     } else {
       form.reset({
         groupName: '',
-        maxRequests: 0,
-        maxSuccess: 1,
+        maxRequests: '0',
+        maxSuccess: '1',
       })
     }
   }, [editData, form, open])
@@ -166,14 +196,9 @@ export function RateLimitDialog({
                 <FormControl>
                   <div className='flex items-center gap-2'>
                     <Input
-                      type='number'
-                      min={0}
-                      max={2147483647}
-                      step={1}
+                      type='text'
+                      placeholder='N(700,std=100)'
                       {...field}
-                      onChange={(e) =>
-                        field.onChange(parseInt(e.target.value) || 0)
-                      }
                     />
                     <span className='text-muted-foreground text-sm'>
                       {t('times')}
@@ -197,14 +222,9 @@ export function RateLimitDialog({
                 <FormControl>
                   <div className='flex items-center gap-2'>
                     <Input
-                      type='number'
-                      min={1}
-                      max={2147483647}
-                      step={1}
+                      type='text'
+                      placeholder='N(700,std=100)'
                       {...field}
-                      onChange={(e) =>
-                        field.onChange(parseInt(e.target.value) || 1)
-                      }
                     />
                     <span className='text-muted-foreground text-sm'>
                       {t('times')}

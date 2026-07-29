@@ -367,11 +367,11 @@ export type OperationsSettings = {
 
 export type SecuritySettings = {
   GlobalApiRateLimitEnabled: boolean
-  GlobalApiRateLimitNum: number
+  GlobalApiRateLimitNum: string
   GlobalApiRateLimitDuration: number
   ModelRequestRateLimitEnabled: boolean
-  ModelRequestRateLimitCount: number
-  ModelRequestRateLimitSuccessCount: number
+  ModelRequestRateLimitCount: string
+  ModelRequestRateLimitSuccessCount: string
   ModelRequestRateLimitDurationMinutes: number
   ModelRequestRateLimitGroup: string
   CheckSensitiveEnabled: boolean

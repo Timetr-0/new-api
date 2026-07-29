@@ -26,11 +26,11 @@ import {
 
 const defaultSecuritySettings: SecuritySettings = {
   GlobalApiRateLimitEnabled: true,
-  GlobalApiRateLimitNum: 360,
+  GlobalApiRateLimitNum: '360',
   GlobalApiRateLimitDuration: 180,
   ModelRequestRateLimitEnabled: false,
-  ModelRequestRateLimitCount: 0,
-  ModelRequestRateLimitSuccessCount: 1000,
+  ModelRequestRateLimitCount: '0',
+  ModelRequestRateLimitSuccessCount: '1000',
   ModelRequestRateLimitDurationMinutes: 1,
   ModelRequestRateLimitGroup: '',
   CheckSensitiveEnabled: false,

@@ -36,6 +36,18 @@ type RateLimitVisualEditorProps = {
 
 type RateLimitEntry = RateLimitEntryData
 
+const normalizeRateLimitValue = (value: unknown) => {
+  if (typeof value === 'number') return String(value)
+  if (typeof value === 'string') return value
+  return null
+}
+
+const serializeRateLimitValue = (value: string) => {
+  const trimmed = value.trim()
+  if (/^\d+$/.test(trimmed)) return Number(trimmed)
+  return trimmed
+}
+
 export function RateLimitVisualEditor({
   value,
   onChange,
@@ -57,16 +69,14 @@ export function RateLimitVisualEditor({
 
     return Object.entries(parsed)
       .map(([groupName, limits]) => {
-        if (
-          Array.isArray(limits) &&
-          limits.length === 2 &&
-          typeof limits[0] === 'number' &&
-          typeof limits[1] === 'number'
-        ) {
+        if (Array.isArray(limits) && limits.length === 2) {
+          const maxRequests = normalizeRateLimitValue(limits[0])
+          const maxSuccess = normalizeRateLimitValue(limits[1])
+          if (maxRequests === null || maxSuccess === null) return null
           return {
             groupName,
-            maxRequests: limits[0],
-            maxSuccess: limits[1],
+            maxRequests,
+            maxSuccess,
           }
         }
         return null
@@ -93,7 +103,10 @@ export function RateLimitVisualEditor({
       delete parsed[editData.groupName]
     }
 
-    parsed[data.groupName] = [data.maxRequests, data.maxSuccess]
+    parsed[data.groupName] = [
+      serializeRateLimitValue(data.maxRequests),
+      serializeRateLimitValue(data.maxSuccess),
+    ]
 
     onChange(JSON.stringify(parsed, null, 2))
   }
@@ -162,9 +175,9 @@ export function RateLimitVisualEditor({
             cellClassName: 'text-right',
             cell: (limit) => (
               <span className='font-mono'>
-                {limit.maxRequests === 0
+                {limit.maxRequests === '0'
                   ? t('Unlimited')
-                  : limit.maxRequests.toLocaleString()}
+                  : limit.maxRequests}
               </span>
             ),
           },
@@ -175,7 +188,7 @@ export function RateLimitVisualEditor({
             cellClassName: 'text-right',
             cell: (limit) => (
               <span className='font-mono'>
-                {limit.maxSuccess.toLocaleString()}
+                {limit.maxSuccess}
               </span>
             ),
           },

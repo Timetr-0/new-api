@@ -118,19 +118,29 @@ func InitEnv() {
 
 	// Initialize rate limit variables
 	GlobalApiRateLimitEnable = GetEnvOrDefaultBool("GLOBAL_API_RATE_LIMIT_ENABLE", true)
-	GlobalApiRateLimitNum = GetEnvOrDefault("GLOBAL_API_RATE_LIMIT", 360)
+	GlobalApiRateLimitNumSpec = GetRateLimitSpecEnvOrDefault("GLOBAL_API_RATE_LIMIT", "360", false)
+	GlobalApiRateLimitNum = RateLimitSpecBaseValue(GlobalApiRateLimitNumSpec, 360)
 	GlobalApiRateLimitDuration = int64(GetEnvOrDefault("GLOBAL_API_RATE_LIMIT_DURATION", 180))
 
 	GlobalWebRateLimitEnable = GetEnvOrDefaultBool("GLOBAL_WEB_RATE_LIMIT_ENABLE", true)
-	GlobalWebRateLimitNum = GetEnvOrDefault("GLOBAL_WEB_RATE_LIMIT", 120)
+	GlobalWebRateLimitNumSpec = GetRateLimitSpecEnvOrDefault("GLOBAL_WEB_RATE_LIMIT", "120", false)
+	GlobalWebRateLimitNum = RateLimitSpecBaseValue(GlobalWebRateLimitNumSpec, 120)
 	GlobalWebRateLimitDuration = int64(GetEnvOrDefault("GLOBAL_WEB_RATE_LIMIT_DURATION", 180))
 
 	CriticalRateLimitEnable = GetEnvOrDefaultBool("CRITICAL_RATE_LIMIT_ENABLE", true)
-	CriticalRateLimitNum = GetEnvOrDefault("CRITICAL_RATE_LIMIT", 20)
+	CriticalRateLimitNumSpec = GetRateLimitSpecEnvOrDefault("CRITICAL_RATE_LIMIT", "20", false)
+	CriticalRateLimitNum = RateLimitSpecBaseValue(CriticalRateLimitNumSpec, 20)
 	CriticalRateLimitDuration = int64(GetEnvOrDefault("CRITICAL_RATE_LIMIT_DURATION", 20*60))
 
+	UploadRateLimitNumSpec = GetRateLimitSpecEnvOrDefault("UPLOAD_RATE_LIMIT", "10", false)
+	UploadRateLimitNum = RateLimitSpecBaseValue(UploadRateLimitNumSpec, 10)
+
+	DownloadRateLimitNumSpec = GetRateLimitSpecEnvOrDefault("DOWNLOAD_RATE_LIMIT", "10", false)
+	DownloadRateLimitNum = RateLimitSpecBaseValue(DownloadRateLimitNumSpec, 10)
+
 	SearchRateLimitEnable = GetEnvOrDefaultBool("SEARCH_RATE_LIMIT_ENABLE", true)
-	SearchRateLimitNum = GetEnvOrDefault("SEARCH_RATE_LIMIT", 10)
+	SearchRateLimitNumSpec = GetRateLimitSpecEnvOrDefault("SEARCH_RATE_LIMIT", "10", false)
+	SearchRateLimitNum = RateLimitSpecBaseValue(SearchRateLimitNumSpec, 10)
 	SearchRateLimitDuration = int64(GetEnvOrDefault("SEARCH_RATE_LIMIT_DURATION", 60))
 	initConstantEnv()
 }
