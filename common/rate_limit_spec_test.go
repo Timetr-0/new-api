@@ -36,3 +36,25 @@ func TestResolveRateLimitSpecCachesDynamicValuePerMinute(t *testing.T) {
 	assert.Equal(t, first, second)
 	assert.GreaterOrEqual(t, first, 1)
 }
+
+func TestSampleNormalRateLimitClampsToMeanBounds(t *testing.T) {
+	spec := RateLimitSpec{
+		Raw:     "N(700,std=10000)",
+		Mean:    700,
+		StdDev:  10000,
+		Dynamic: true,
+	}
+	lowerBound, upperBound := normalRateLimitBounds(spec.Mean)
+	require.Equal(t, 280, lowerBound)
+	require.Equal(t, 1120, upperBound)
+
+	for minute := int64(0); minute < 500; minute++ {
+		value := sampleNormalRateLimit("test-clamp", spec, minute)
+		assert.GreaterOrEqual(t, value, lowerBound)
+		assert.LessOrEqual(t, value, upperBound)
+	}
+
+	lowerBound, upperBound = normalRateLimitBounds(1)
+	assert.Equal(t, 1, lowerBound)
+	assert.Equal(t, 2, upperBound)
+}

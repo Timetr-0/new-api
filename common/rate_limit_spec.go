@@ -161,13 +161,30 @@ func sampleNormalRateLimit(scope string, spec RateLimitSpec, minute int64) int {
 	_, _ = hasher.Write([]byte(strconv.FormatInt(minute, 10)))
 	rng := rand.New(rand.NewSource(int64(hasher.Sum64())))
 	value := int(math.Round(rng.NormFloat64()*spec.StdDev + spec.Mean))
-	if value < 1 {
-		return 1
+	lowerBound, upperBound := normalRateLimitBounds(spec.Mean)
+	if value < lowerBound {
+		return lowerBound
 	}
-	if value > math.MaxInt32 {
-		return math.MaxInt32
+	if value > upperBound {
+		return upperBound
 	}
 	return value
+}
+
+func normalRateLimitBounds(mean float64) (int, int) {
+	lowerBound := int(math.Round(mean * 0.4))
+	if lowerBound < 1 {
+		lowerBound = 1
+	}
+
+	upperBound := math.MaxInt32
+	if upperValue := mean * 1.6; upperValue < math.MaxInt32 {
+		upperBound = int(math.Round(upperValue))
+	}
+	if upperBound < lowerBound {
+		upperBound = lowerBound
+	}
+	return lowerBound, upperBound
 }
 
 func RateLimitSpecBaseValue(raw string, fallback int) int {
