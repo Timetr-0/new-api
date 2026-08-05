@@ -155,6 +155,16 @@ var defaultModelRatio = map[string]float64{
 	"claude-opus-4-8-high":                      2.5,
 	"claude-opus-4-8-medium":                    2.5,
 	"claude-opus-4-8-low":                       2.5,
+	"claude-sonnet-5":                           1.1, // AWS Bedrock in-region/geo promotional price: $2.20 / 1M input tokens
+	"anthropic.claude-sonnet-5":                 1.1, // AWS Bedrock in-region/geo promotional price: $2.20 / 1M input tokens
+	"us.anthropic.claude-sonnet-5":              1.1, // AWS Bedrock geo promotional price: $2.20 / 1M input tokens
+	"eu.anthropic.claude-sonnet-5":              1.1, // AWS Bedrock geo promotional price: $2.20 / 1M input tokens
+	"au.anthropic.claude-sonnet-5":              1.1, // AWS Bedrock geo promotional price: $2.20 / 1M input tokens
+	"claude-opus-5":                             2.75, // AWS Bedrock in-region/geo: $5.50 / 1M input tokens
+	"anthropic.claude-opus-5":                   2.75, // AWS Bedrock in-region/geo: $5.50 / 1M input tokens
+	"us.anthropic.claude-opus-5":                2.75, // AWS Bedrock geo: $5.50 / 1M input tokens
+	"eu.anthropic.claude-opus-5":                2.75, // AWS Bedrock geo: $5.50 / 1M input tokens
+	"au.anthropic.claude-opus-5":                2.75, // AWS Bedrock geo: $5.50 / 1M input tokens
 	"claude-fable-5":                            5.5, // AWS Bedrock in-region/geo: $11 / 1M input tokens
 	"anthropic.claude-fable-5":                  5.5, // AWS Bedrock in-region/geo: $11 / 1M input tokens
 	"us.anthropic.claude-fable-5":               5.5, // AWS Bedrock geo: $11 / 1M input tokens
@@ -181,6 +191,8 @@ var defaultModelRatio = map[string]float64{
 	"global.anthropic.claude-opus-4-6-v1":                2.5,   // $5 / 1M input tokens
 	"global.anthropic.claude-opus-4-7":                   2.5,   // $5 / 1M input tokens
 	"global.anthropic.claude-opus-4-8":                   2.5,   // $5 / 1M input tokens
+	"global.anthropic.claude-sonnet-5":                   1,     // AWS Bedrock global promotional price: $2 / 1M input tokens
+	"global.anthropic.claude-opus-5":                     2.5,   // AWS Bedrock global: $5 / 1M input tokens
 	"global.anthropic.claude-fable-5":                    5,     // $10 / 1M input tokens
 	"ERNIE-4.0-8K":                              0.120 * RMB,
 	"ERNIE-3.5-8K":                              0.012 * RMB,
@@ -568,6 +580,8 @@ func getHardcodedCompletionModelRatio(name string) (float64, bool) {
 	} else if strings.Contains(name, "claude-sonnet-4") ||
 		strings.Contains(name, "claude-opus-4") ||
 		strings.Contains(name, "claude-haiku-4") ||
+		strings.Contains(name, "claude-sonnet-5") ||
+		strings.Contains(name, "claude-opus-5") ||
 		strings.Contains(name, "claude-fable-5") {
 		return 5, true
 	}

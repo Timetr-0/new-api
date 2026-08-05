@@ -420,6 +420,8 @@ export const AWS_CLAUDE_MODEL_MAPPINGS = [
   ['claude-opus-4-6', 'anthropic.claude-opus-4-6-v1'],
   ['claude-opus-4-7', 'anthropic.claude-opus-4-7'],
   ['claude-opus-4-8', 'anthropic.claude-opus-4-8'],
+  ['claude-sonnet-5', 'anthropic.claude-sonnet-5'],
+  ['claude-opus-5', 'anthropic.claude-opus-5'],
   ['claude-fable-5', 'anthropic.claude-fable-5'],
   ['anthropic.claude-fable-5', 'anthropic.claude-fable-5'],
 ] as const
@@ -482,6 +484,8 @@ export const AWS_GLOBAL_CLAUDE_MODEL_MAPPINGS = [
   ['claude-opus-4-6-v1', 'global.anthropic.claude-opus-4-6-v1'],
   ['claude-opus-4-7', 'global.anthropic.claude-opus-4-7'],
   ['claude-opus-4-8', 'global.anthropic.claude-opus-4-8'],
+  ['claude-sonnet-5', 'global.anthropic.claude-sonnet-5'],
+  ['claude-opus-5', 'global.anthropic.claude-opus-5'],
   ['claude-fable-5', 'global.anthropic.claude-fable-5'],
 ] as const
 
