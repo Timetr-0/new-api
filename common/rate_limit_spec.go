@@ -172,13 +172,13 @@ func sampleNormalRateLimit(scope string, spec RateLimitSpec, minute int64) int {
 }
 
 func normalRateLimitBounds(mean float64) (int, int) {
-	lowerBound := int(math.Round(mean * 0.4))
+	lowerBound := int(math.Round(mean * 0.8))
 	if lowerBound < 1 {
 		lowerBound = 1
 	}
 
 	upperBound := math.MaxInt32
-	if upperValue := mean * 1.6; upperValue < math.MaxInt32 {
+	if upperValue := mean * 1.2; upperValue < math.MaxInt32 {
 		upperBound = int(math.Round(upperValue))
 	}
 	if upperBound < lowerBound {

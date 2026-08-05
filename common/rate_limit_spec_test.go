@@ -45,8 +45,8 @@ func TestSampleNormalRateLimitClampsToMeanBounds(t *testing.T) {
 		Dynamic: true,
 	}
 	lowerBound, upperBound := normalRateLimitBounds(spec.Mean)
-	require.Equal(t, 280, lowerBound)
-	require.Equal(t, 1120, upperBound)
+	require.Equal(t, 560, lowerBound)
+	require.Equal(t, 840, upperBound)
 
 	for minute := int64(0); minute < 500; minute++ {
 		value := sampleNormalRateLimit("test-clamp", spec, minute)
@@ -56,5 +56,5 @@ func TestSampleNormalRateLimitClampsToMeanBounds(t *testing.T) {
 
 	lowerBound, upperBound = normalRateLimitBounds(1)
 	assert.Equal(t, 1, lowerBound)
-	assert.Equal(t, 2, upperBound)
+	assert.Equal(t, 1, upperBound)
 }
