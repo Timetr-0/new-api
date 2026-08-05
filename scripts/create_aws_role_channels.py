@@ -22,8 +22,8 @@ DEFAULT_ACCESSIBLE_REGIONS = [
 
     # ==================== 欧洲：南欧 ====================
 
-    "eu-south-1",       # 欧洲（米兰），意大利
-    "eu-south-2",       # 欧洲（西班牙）
+    # "eu-south-1",       # 欧洲（米兰），意大利
+    # "eu-south-2",       # 欧洲（西班牙）
 
     # ==================== 中东 ====================
 
@@ -40,7 +40,7 @@ DEFAULT_ACCESSIBLE_REGIONS = [
     # ==================== 欧洲：中欧 ====================
 
     "eu-central-1",     # 欧洲（法兰克福），德国
-    "eu-central-2",     # 欧洲（苏黎世），瑞士
+    # "eu-central-2",     # 欧洲（苏黎世），瑞士
 
     # ==================== 美国西部 ====================
 
@@ -91,14 +91,14 @@ DEFAULT_ACCESSIBLE_REGIONS = [
 
 DEFAULT_REGION_WEIGHT_TEMPLATES: dict[str, dict[str, int]] = {
     "us-first": {
-        "eu-central-1": 60,
+        "eu-central-1": 75,
         "us-west-1": 80,
         "us-west-2": 80,
-        "eu-north-1": 60,
-        "eu-west-3": 60,
-        "eu-west-2": 60,
-        "eu-west-1": 60,
-        "us-east-1": 100,
+        "eu-north-1": 75,
+        "eu-west-3": 75,
+        "eu-west-2": 75,
+        "eu-west-1": 75,
+        "us-east-1": 85,
         "us-east-2": 80,
     },
     "equal": {
