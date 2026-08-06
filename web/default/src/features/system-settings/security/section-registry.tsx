@@ -42,6 +42,8 @@ const SECURITY_SECTIONS = [
           ModelRequestRateLimitGroup: settings.ModelRequestRateLimitGroup,
           AwsBedrockRateLimitEnabled: settings.AwsBedrockRateLimitEnabled,
           AwsBedrockRateLimitCount: settings.AwsBedrockRateLimitCount,
+          AwsBedrockRateLimitPerSecondCount:
+            settings.AwsBedrockRateLimitPerSecondCount,
           AwsBedrockRateLimitQueueTimeoutSeconds:
             settings.AwsBedrockRateLimitQueueTimeoutSeconds,
           AwsBedrockRateLimitQueueMaxSize:

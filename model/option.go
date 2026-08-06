@@ -145,6 +145,7 @@ func InitOptionMap() {
 	common.OptionMap["ModelRequestRateLimitGroup"] = setting.ModelRequestRateLimitGroup2JSONString()
 	common.OptionMap["AwsBedrockRateLimitEnabled"] = strconv.FormatBool(setting.AwsBedrockRateLimitEnabled)
 	common.OptionMap["AwsBedrockRateLimitCount"] = setting.AwsBedrockRateLimitCountSpec
+	common.OptionMap["AwsBedrockRateLimitPerSecondCount"] = strconv.Itoa(setting.AwsBedrockRateLimitPerSecondCount)
 	common.OptionMap["AwsBedrockRateLimitQueueTimeoutSeconds"] = strconv.Itoa(setting.AwsBedrockRateLimitQueueTimeoutSeconds)
 	common.OptionMap["AwsBedrockRateLimitQueueMaxSize"] = strconv.Itoa(setting.AwsBedrockRateLimitQueueMaxSize)
 	common.OptionMap["ModelRatio"] = ratio_setting.ModelRatio2JSONString()
@@ -543,6 +544,8 @@ func updateOptionMap(key string, value string) (err error) {
 	case "AwsBedrockRateLimitCount":
 		setting.AwsBedrockRateLimitCountSpec = value
 		setting.AwsBedrockRateLimitCount = common.RateLimitSpecBaseValue(value, setting.AwsBedrockRateLimitCount)
+	case "AwsBedrockRateLimitPerSecondCount":
+		setting.AwsBedrockRateLimitPerSecondCount, _ = strconv.Atoi(value)
 	case "AwsBedrockRateLimitQueueTimeoutSeconds":
 		setting.AwsBedrockRateLimitQueueTimeoutSeconds, _ = strconv.Atoi(value)
 	case "AwsBedrockRateLimitQueueMaxSize":

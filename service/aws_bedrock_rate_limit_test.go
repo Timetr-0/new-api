@@ -37,6 +37,31 @@ func TestAwsBedrockSlidingWindowLimiterAllowsAfterWindowSlides(t *testing.T) {
 	assert.Zero(t, retryAfter)
 }
 
+func TestAwsBedrockSlidingWindowLimiterRequiresAllWindowsBeforeRecording(t *testing.T) {
+	limiter := &awsBedrockSlidingWindowLimiter{}
+	now := time.Unix(100, 0)
+	limits := []awsBedrockMemoryWindowLimit{
+		{key: "minute", limit: 2, window: time.Minute},
+		{key: "second", limit: 1, window: time.Second},
+	}
+
+	allowed, retryAfter := limiter.allowWindows(limits, now)
+	require.True(t, allowed)
+	assert.Zero(t, retryAfter)
+
+	allowed, retryAfter = limiter.allowWindows(limits, now.Add(100*time.Millisecond))
+	require.False(t, allowed)
+	assert.Equal(t, 900*time.Millisecond, retryAfter)
+
+	allowed, retryAfter = limiter.allowWindows(limits, now.Add(time.Second))
+	require.True(t, allowed)
+	assert.Zero(t, retryAfter)
+
+	allowed, retryAfter = limiter.allowWindows(limits, now.Add(2*time.Second))
+	require.False(t, allowed)
+	assert.Equal(t, 58*time.Second, retryAfter)
+}
+
 func TestAwsBedrockMemoryQueueLimit(t *testing.T) {
 	limiter := &awsBedrockSlidingWindowLimiter{}
 

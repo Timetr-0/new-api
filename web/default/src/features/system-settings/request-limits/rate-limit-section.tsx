@@ -137,6 +137,7 @@ const createRateLimitSchema = (t: (key: string) => string) =>
       .refine((value) => isValidRateLimitSpec(value, true), {
         message: t('Invalid JSON format or values out of allowed range'),
       }),
+    AwsBedrockRateLimitPerSecondCount: z.number().min(0).max(2147483647),
     AwsBedrockRateLimitQueueTimeoutSeconds: z
       .number()
       .min(1)
@@ -485,7 +486,7 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
             )}
           />
 
-          <div className='grid gap-4 md:grid-cols-3'>
+          <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
             <FormField
               control={form.control}
               name='AwsBedrockRateLimitCount'
@@ -507,6 +508,39 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                   <FormDescription>
                     {t(
                       'Sampled once per minute when using N(mean,std=stddev), 0 = unlimited'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='AwsBedrockRateLimitPerSecondCount'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Requests per second')}</FormLabel>
+                  <FormControl>
+                    <div className='flex items-center gap-2'>
+                      <Input
+                        type='number'
+                        min={0}
+                        max={2147483647}
+                        step={1}
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(Number.parseInt(e.target.value) || 0)
+                        }
+                      />
+                      <span className='text-muted-foreground text-sm'>
+                        {t('times')}
+                      </span>
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Controls short-burst speed before the per-minute limit, 0 = unlimited'
                     )}
                   </FormDescription>
                   <FormMessage />
