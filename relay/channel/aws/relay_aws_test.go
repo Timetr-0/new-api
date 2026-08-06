@@ -180,6 +180,61 @@ func TestSetupRequestHeader_UsesOnlyAwsApiKeyForBearerToken(t *testing.T) {
 	require.Equal(t, "Bearer bedrock-api-key", headers.Get("Authorization"))
 }
 
+func TestDoRequest_ApiKeyModeUsesHttpBaseURLBeforeGetRequestURL(t *testing.T) {
+	t.Parallel()
+
+	gin.SetMode(gin.TestMode)
+
+	type seenRequestInfo struct {
+		path          string
+		authorization string
+	}
+	seenRequest := make(chan seenRequestInfo, 1)
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seenRequest <- seenRequestInfo{
+			path:          r.URL.Path,
+			authorization: r.Header.Get("Authorization"),
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"msg_mock","type":"message","role":"assistant","content":[{"type":"text","text":"hello"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`))
+	}))
+	defer upstream.Close()
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+
+	info := &relaycommon.RelayInfo{
+		OriginModelName: "claude-3-5-sonnet-20240620",
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ApiKey:            " bedrock-api-key | us-west-2 ",
+			ChannelBaseUrl:    upstream.URL,
+			UpstreamModelName: "claude-3-5-sonnet-20240620",
+			ChannelOtherSettings: dto.ChannelOtherSettings{
+				AwsKeyType: dto.AwsKeyTypeApiKey,
+			},
+		},
+	}
+
+	adaptor := &Adaptor{}
+	respAny, err := adaptor.DoRequest(
+		ctx,
+		info,
+		bytes.NewBufferString(`{"messages":[{"role":"user","content":"hello"}],"max_tokens":8}`),
+	)
+	require.NoError(t, err)
+
+	resp, ok := respAny.(*http.Response)
+	require.True(t, ok)
+	defer resp.Body.Close()
+
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, ClientModeApiKey, adaptor.ClientMode)
+	request := <-seenRequest
+	require.Equal(t, "/model/anthropic.claude-3-5-sonnet-20240620-v1:0/converse", request.path)
+	require.Equal(t, "Bearer bedrock-api-key", request.authorization)
+}
+
 func TestSplitAwsSecretTrimsParts(t *testing.T) {
 	t.Parallel()
 

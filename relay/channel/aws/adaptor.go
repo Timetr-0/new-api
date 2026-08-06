@@ -89,11 +89,22 @@ func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInf
 func (a *Adaptor) Init(info *relaycommon.RelayInfo) {
 }
 
-func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
-	switch info.ChannelOtherSettings.AwsKeyType {
+func (a *Adaptor) setClientMode(keyType dto.AwsKeyType) {
+	switch keyType {
 	case dto.AwsKeyTypeApiKey:
-		awsModelId := getAwsModelID(info.UpstreamModelName)
 		a.ClientMode = ClientModeApiKey
+	case dto.AwsKeyTypeRoleArn:
+		a.ClientMode = ClientModeRoleArn
+	default:
+		a.ClientMode = ClientModeAKSK
+	}
+}
+
+func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
+	a.setClientMode(info.ChannelOtherSettings.AwsKeyType)
+	switch a.ClientMode {
+	case ClientModeApiKey:
+		awsModelId := getAwsModelID(info.UpstreamModelName)
 		awsSecret := splitAwsSecret(info.ApiKey)
 		if len(awsSecret) != 2 {
 			return "", errors.New("invalid aws api key, should be in format of <api-key>|<region>")
@@ -103,11 +114,9 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 			baseURL = fmt.Sprintf("https://bedrock-runtime.%s.amazonaws.com", awsSecret[1])
 		}
 		return fmt.Sprintf("%s/model/%s/converse", baseURL, awsModelId), nil
-	case dto.AwsKeyTypeRoleArn:
-		a.ClientMode = ClientModeRoleArn
+	case ClientModeRoleArn:
 		return "", nil
 	default:
-		a.ClientMode = ClientModeAKSK
 		return "", nil
 	}
 }
@@ -171,6 +180,9 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
+	if info != nil {
+		a.setClientMode(info.ChannelOtherSettings.AwsKeyType)
+	}
 	if a.ClientMode == ClientModeApiKey {
 		if err := service.WaitAwsBedrockRateLimit(c); err != nil {
 			return nil, err
