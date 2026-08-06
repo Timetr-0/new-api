@@ -25,6 +25,20 @@ var AwsBedrockRateLimitCountSpec = "0"
 var AwsBedrockRateLimitQueueTimeoutSeconds = 30
 var AwsBedrockRateLimitQueueMaxSize = 0
 
+func InitAwsBedrockRateLimitEnv() {
+	AwsBedrockRateLimitEnabled = common.GetEnvOrDefaultBool("AWS_BEDROCK_RATE_LIMIT_ENABLE", false)
+	AwsBedrockRateLimitCountSpec = common.GetRateLimitSpecEnvOrDefault("AWS_BEDROCK_RATE_LIMIT", "0", true)
+	AwsBedrockRateLimitCount = common.RateLimitSpecBaseValue(AwsBedrockRateLimitCountSpec, 0)
+	AwsBedrockRateLimitQueueTimeoutSeconds = common.GetEnvOrDefault("AWS_BEDROCK_RATE_LIMIT_QUEUE_TIMEOUT_SECONDS", 30)
+	if AwsBedrockRateLimitQueueTimeoutSeconds <= 0 {
+		AwsBedrockRateLimitQueueTimeoutSeconds = 30
+	}
+	AwsBedrockRateLimitQueueMaxSize = common.GetEnvOrDefault("AWS_BEDROCK_RATE_LIMIT_QUEUE_MAX_SIZE", 0)
+	if AwsBedrockRateLimitQueueMaxSize < 0 {
+		AwsBedrockRateLimitQueueMaxSize = 0
+	}
+}
+
 func ModelRequestRateLimitGroup2JSONString() string {
 	ModelRequestRateLimitMutex.RLock()
 	defer ModelRequestRateLimitMutex.RUnlock()

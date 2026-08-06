@@ -143,17 +143,6 @@ func InitEnv() {
 	SearchRateLimitNum = RateLimitSpecBaseValue(SearchRateLimitNumSpec, 10)
 	SearchRateLimitDuration = int64(GetEnvOrDefault("SEARCH_RATE_LIMIT_DURATION", 60))
 
-	setting.AwsBedrockRateLimitEnabled = GetEnvOrDefaultBool("AWS_BEDROCK_RATE_LIMIT_ENABLE", false)
-	setting.AwsBedrockRateLimitCountSpec = GetRateLimitSpecEnvOrDefault("AWS_BEDROCK_RATE_LIMIT", "0", true)
-	setting.AwsBedrockRateLimitCount = RateLimitSpecBaseValue(setting.AwsBedrockRateLimitCountSpec, 0)
-	setting.AwsBedrockRateLimitQueueTimeoutSeconds = GetEnvOrDefault("AWS_BEDROCK_RATE_LIMIT_QUEUE_TIMEOUT_SECONDS", 30)
-	if setting.AwsBedrockRateLimitQueueTimeoutSeconds <= 0 {
-		setting.AwsBedrockRateLimitQueueTimeoutSeconds = 30
-	}
-	setting.AwsBedrockRateLimitQueueMaxSize = GetEnvOrDefault("AWS_BEDROCK_RATE_LIMIT_QUEUE_MAX_SIZE", 0)
-	if setting.AwsBedrockRateLimitQueueMaxSize < 0 {
-		setting.AwsBedrockRateLimitQueueMaxSize = 0
-	}
 	initConstantEnv()
 }
 
