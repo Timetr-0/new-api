@@ -135,6 +135,27 @@ func TestGetRequestURL_SupportsApiKeyKeyType(t *testing.T) {
 	require.Equal(t, ClientModeApiKey, adaptor.ClientMode)
 }
 
+func TestGetRequestURL_ApiKeyModeUsesChannelBaseURL(t *testing.T) {
+	t.Parallel()
+
+	adaptor := &Adaptor{}
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{
+			ApiKey:            " bedrock-api-key | us-west-2 ",
+			ChannelBaseUrl:    " http://127.0.0.1:18080/ ",
+			UpstreamModelName: "claude-3-5-sonnet-20240620",
+			ChannelOtherSettings: dto.ChannelOtherSettings{
+				AwsKeyType: dto.AwsKeyTypeApiKey,
+			},
+		},
+	}
+
+	requestURL, err := adaptor.GetRequestURL(info)
+	require.NoError(t, err)
+	require.Equal(t, "http://127.0.0.1:18080/model/anthropic.claude-3-5-sonnet-20240620-v1:0/converse", requestURL)
+	require.Equal(t, ClientModeApiKey, adaptor.ClientMode)
+}
+
 func TestSetupRequestHeader_UsesOnlyAwsApiKeyForBearerToken(t *testing.T) {
 	t.Parallel()
 
