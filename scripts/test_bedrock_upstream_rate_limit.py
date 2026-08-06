@@ -438,6 +438,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--admin-user-id", default=os.getenv("NEW_API_USER_ID", ""))
     parser.add_argument("--group", default=os.getenv("NEW_API_TEST_GROUP", "default"))
     parser.add_argument(
+    "--channel-warmup-seconds",
+    type=float,
+    default=0.0,
+    help="Wait after creating mock channels so distributor caches can refresh.",
+    )
+    parser.add_argument(
         "--groups",
         default=os.getenv("NEW_API_TEST_GROUPS", ""),
         help="Comma-separated group labels matched one-to-one with --api-keys.",
