@@ -10,6 +10,8 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/common/limiter"
+	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
@@ -119,7 +121,7 @@ func WaitAwsBedrockRateLimit(c *gin.Context) *types.NewAPIError {
 		return nil
 	}
 
-	minuteLimit, err := common.ResolveRateLimitSpec(awsBedrockRateLimitScope, setting.AwsBedrockRateLimitCountSpec, true)
+	minuteBaseLimit, err := common.ResolveRateLimitSpec(awsBedrockRateLimitScope, setting.AwsBedrockRateLimitCountSpec, true)
 	if err != nil {
 		return types.NewOpenAIError(
 			fmt.Errorf("aws bedrock rate limit config invalid: %w", err),
@@ -128,7 +130,7 @@ func WaitAwsBedrockRateLimit(c *gin.Context) *types.NewAPIError {
 			types.ErrOptionWithSkipRetry(),
 		)
 	}
-	secondLimit, err := common.ResolveRateLimitSpec("AWS_BEDROCK_RATE_LIMIT_PER_SECOND", setting.AwsBedrockRateLimitPerSecondCountSpec, true)
+	secondBaseLimit, err := common.ResolveRateLimitSpec("AWS_BEDROCK_RATE_LIMIT_PER_SECOND", setting.AwsBedrockRateLimitPerSecondCountSpec, true)
 	if err != nil {
 		return types.NewOpenAIError(
 			fmt.Errorf("aws bedrock per-second rate limit config invalid: %w", err),
@@ -137,9 +139,16 @@ func WaitAwsBedrockRateLimit(c *gin.Context) *types.NewAPIError {
 			types.ErrOptionWithSkipRetry(),
 		)
 	}
-	if minuteLimit <= 0 && secondLimit <= 0 {
+	if minuteBaseLimit <= 0 && secondBaseLimit <= 0 {
 		return nil
 	}
+
+	channelCount, err := awsBedrockRateLimitChannelCount(c)
+	if err != nil {
+		return awsBedrockRateLimitError(fmt.Errorf("aws bedrock channel count failed: %w", err), http.StatusInternalServerError)
+	}
+	minuteLimit := scaleAwsBedrockRateLimit(minuteBaseLimit, channelCount)
+	secondLimit := scaleAwsBedrockRateLimit(secondBaseLimit, channelCount)
 
 	ctx := context.Background()
 	if c != nil && c.Request != nil {
@@ -157,6 +166,52 @@ func WaitAwsBedrockRateLimit(c *gin.Context) *types.NewAPIError {
 		return waitAwsBedrockRedisRateLimit(ctx, minuteLimit, secondLimit)
 	}
 	return waitAwsBedrockMemoryRateLimit(ctx, minuteLimit, secondLimit)
+}
+
+func awsBedrockRateLimitChannelCount(c *gin.Context) (int, error) {
+	if c == nil {
+		return 1, nil
+	}
+
+	group := common.GetContextKeyString(c, constant.ContextKeyAutoGroup)
+	if group == "" {
+		group = common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	}
+	if group == "" {
+		group = common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
+	}
+	if group == "" || group == "auto" {
+		return 1, nil
+	}
+
+	modelName := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
+	if modelName == "" {
+		return 1, nil
+	}
+
+	count, err := model.CountEnabledChannelsByGroupModelAndType(group, modelName, constant.ChannelTypeAws)
+	if err != nil {
+		return 0, err
+	}
+	if count < 1 {
+		return 1, nil
+	}
+	return count, nil
+}
+
+func scaleAwsBedrockRateLimit(baseLimit int, channelCount int) int {
+	if baseLimit <= 0 {
+		return 0
+	}
+	if channelCount < 1 {
+		channelCount = 1
+	}
+
+	maxInt := int(^uint(0) >> 1)
+	if baseLimit > maxInt/channelCount {
+		return maxInt
+	}
+	return baseLimit * channelCount
 }
 
 func waitAwsBedrockRedisRateLimit(ctx context.Context, minuteLimit int, secondLimit int) *types.NewAPIError {

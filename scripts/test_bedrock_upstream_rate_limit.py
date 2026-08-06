@@ -448,8 +448,9 @@ def main() -> int:
             f"p50_latency={p50:.2f}s p95_latency={p95:.2f}s"
         )
         print(
-            "expected: with AWS Bedrock limit=10/min and send rate=60/min, "
-            "only about the first 10 should be fast; later requests should wait or return 429."
+            "expected: with AWS Bedrock base limit=10/min and one enabled AWS channel "
+            "in the effective group, only about the first 10 should be fast. "
+            "With N enabled AWS channels, the effective limit is 10*N/min."
         )
         if mock_state is not None:
             with mock_state.lock:

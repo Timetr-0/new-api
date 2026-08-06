@@ -208,6 +208,37 @@ func GetRandomSatisfiedChannel(group string, model string, retry int, requestPat
 	return nil, errors.New("channel not found")
 }
 
+func countEnabledChannelsByGroupModelAndTypeCache(group string, modelName string, channelType int) int {
+	channelSyncLock.RLock()
+	defer channelSyncLock.RUnlock()
+
+	if group2model2channels == nil || channelsIDM == nil {
+		return 0
+	}
+
+	channels := group2model2channels[group][modelName]
+	if len(channels) == 0 {
+		normalizedModel := ratio_setting.FormatMatchingModelName(modelName)
+		if normalizedModel != modelName {
+			channels = group2model2channels[group][normalizedModel]
+		}
+	}
+
+	count := 0
+	seen := make(map[int]struct{}, len(channels))
+	for _, channelId := range channels {
+		if _, ok := seen[channelId]; ok {
+			continue
+		}
+		seen[channelId] = struct{}{}
+		channel, ok := channelsIDM[channelId]
+		if ok && channel.Type == channelType && channel.Status == common.ChannelStatusEnabled {
+			count++
+		}
+	}
+	return count
+}
+
 // filterChannelsByRequestPathAndModel restricts candidates by request path and
 // model. Only Advanced Custom (type 58) channels are path-checked: they are kept
 // only when one of their configured routes matches requestPath and model. All

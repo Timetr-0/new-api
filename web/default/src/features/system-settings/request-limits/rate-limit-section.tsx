@@ -496,7 +496,9 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
               name='AwsBedrockRateLimitCount'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Requests per minute')}</FormLabel>
+                  <FormLabel>
+                    {t('Base requests per minute per active AWS channel')}
+                  </FormLabel>
                   <FormControl>
                     <div className='flex items-center gap-2'>
                       <Input
@@ -511,7 +513,7 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'Sampled once per minute when using N(mean,std=stddev), 0 = unlimited'
+                      'Final limit is this value multiplied by enabled AWS Bedrock channels in the effective group. N(mean,std=stddev) is sampled once per minute, 0 = unlimited'
                     )}
                   </FormDescription>
                   <FormMessage />
@@ -524,7 +526,9 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
               name='AwsBedrockRateLimitPerSecondCount'
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('Requests per second')}</FormLabel>
+                  <FormLabel>
+                    {t('Base requests per second per active AWS channel')}
+                  </FormLabel>
                   <FormControl>
                     <div className='flex items-center gap-2'>
                       <Input
@@ -539,7 +543,7 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'Sampled once per minute when using N(mean,std=stddev), 0 = unlimited'
+                      'Final limit is this value multiplied by enabled AWS Bedrock channels in the effective group. N(mean,std=stddev) is sampled once per minute, 0 = unlimited'
                     )}
                   </FormDescription>
                   <FormMessage />

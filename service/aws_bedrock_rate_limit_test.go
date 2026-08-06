@@ -62,6 +62,12 @@ func TestAwsBedrockSlidingWindowLimiterRequiresAllWindowsBeforeRecording(t *test
 	assert.Equal(t, 58*time.Second, retryAfter)
 }
 
+func TestScaleAwsBedrockRateLimitUsesChannelCount(t *testing.T) {
+	assert.Equal(t, 0, scaleAwsBedrockRateLimit(0, 8))
+	assert.Equal(t, 10, scaleAwsBedrockRateLimit(10, 0))
+	assert.Equal(t, 30, scaleAwsBedrockRateLimit(10, 3))
+}
+
 func TestAwsBedrockMemoryQueueLimit(t *testing.T) {
 	limiter := &awsBedrockSlidingWindowLimiter{}
 
