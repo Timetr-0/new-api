@@ -91,13 +91,13 @@ DEFAULT_ACCESSIBLE_REGIONS = [
 
 DEFAULT_REGION_WEIGHT_TEMPLATES: dict[str, dict[str, int]] = {
     "us-first": {
-        "eu-central-1": 75,
+        "eu-central-1": 82,
         "us-west-1": 80,
         "us-west-2": 80,
-        "eu-north-1": 75,
-        "eu-west-3": 75,
-        "eu-west-2": 75,
-        "eu-west-1": 75,
+        "eu-north-1": 80,
+        "eu-west-3": 80,
+        "eu-west-2": 80,
+        "eu-west-1": 80,
         "us-east-1": 85,
         "us-east-2": 80,
     },
