@@ -189,6 +189,17 @@ def create_mock_channel(
     )
 
 
+def fix_channel_abilities(args: argparse.Namespace) -> None:
+    result = admin_request(args, "POST", "/api/channel/fix")
+    if not result.get("success"):
+        raise RuntimeError(f"fix channel abilities failed: {result.get('message') or result}")
+    data = result.get("data") or {}
+    print(
+        "refreshed channel abilities "
+        f"success={data.get('success', '?')} fails={data.get('fails', '?')}"
+    )
+
+
 def find_mock_channel_ids(args: argparse.Namespace, group: str, channel_name: str) -> list[int]:
     query = urllib.parse.urlencode(
         {
@@ -438,10 +449,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--admin-user-id", default=os.getenv("NEW_API_USER_ID", ""))
     parser.add_argument("--group", default=os.getenv("NEW_API_TEST_GROUP", "default"))
     parser.add_argument(
-    "--channel-warmup-seconds",
-    type=float,
-    default=0.0,
-    help="Wait after creating mock channels so distributor caches can refresh.",
+        "--channel-warmup-seconds",
+        type=float,
+        default=0.0,
+        help="Wait after creating mock channels so distributor caches can refresh.",
     )
     parser.add_argument(
         "--groups",
@@ -498,6 +509,10 @@ def main() -> int:
                 channel_name = mock_channel_name_for_group(args, group, len(groups))
                 create_mock_channel(args, mock_base_url, group, channel_name)
                 created_mock_channels.append((group, channel_name))
+            fix_channel_abilities(args)
+            if args.channel_warmup_seconds > 0:
+                print(f"waiting {args.channel_warmup_seconds:g}s for channel cache warmup")
+                time.sleep(args.channel_warmup_seconds)
 
     try:
         interval = 60.0 / args.rpm
