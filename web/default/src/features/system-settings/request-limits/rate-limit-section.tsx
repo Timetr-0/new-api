@@ -131,6 +131,17 @@ const createRateLimitSchema = (t: (key: string) => string) =>
       .refine(isValidJSON, {
         message: t('Invalid JSON format or values out of allowed range'),
       }),
+    AwsBedrockRateLimitEnabled: z.boolean(),
+    AwsBedrockRateLimitCount: z
+      .string()
+      .refine((value) => isValidRateLimitSpec(value, true), {
+        message: t('Invalid JSON format or values out of allowed range'),
+      }),
+    AwsBedrockRateLimitQueueTimeoutSeconds: z
+      .number()
+      .min(1)
+      .max(2147483647),
+    AwsBedrockRateLimitQueueMaxSize: z.number().min(0).max(2147483647),
   })
 
 type RateLimitFormValues = z.infer<ReturnType<typeof createRateLimitSchema>>
@@ -445,6 +456,121 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
               </FormItem>
             )}
           />
+
+          <div className='space-y-1'>
+            <h3 className='text-sm font-semibold'>
+              {t('AWS Bedrock upstream rate limiting')}
+            </h3>
+            <p className='text-muted-foreground text-xs'>
+              {t(
+                'Applies before sending requests to AWS Bedrock. Excess requests wait in a synchronous queue.'
+              )}
+            </p>
+          </div>
+          <FormField
+            control={form.control}
+            name='AwsBedrockRateLimitEnabled'
+            render={({ field }) => (
+              <SettingsSwitchItem>
+                <SettingsSwitchContent>
+                  <FormLabel>{t('Enable rate limiting')}</FormLabel>
+                </SettingsSwitchContent>
+                <FormControl>
+                  <Switch
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                  />
+                </FormControl>
+              </SettingsSwitchItem>
+            )}
+          />
+
+          <div className='grid gap-4 md:grid-cols-3'>
+            <FormField
+              control={form.control}
+              name='AwsBedrockRateLimitCount'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Requests per minute')}</FormLabel>
+                  <FormControl>
+                    <div className='flex items-center gap-2'>
+                      <Input
+                        type='text'
+                        placeholder='N(2000,std=10)'
+                        {...field}
+                      />
+                      <span className='text-muted-foreground text-sm'>
+                        {t('times')}
+                      </span>
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    {t(
+                      'Sampled once per minute when using N(mean,std=stddev), 0 = unlimited'
+                    )}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='AwsBedrockRateLimitQueueTimeoutSeconds'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Max wait time')}</FormLabel>
+                  <FormControl>
+                    <div className='flex items-center gap-2'>
+                      <Input
+                        type='number'
+                        min={1}
+                        max={2147483647}
+                        step={1}
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(Number.parseInt(e.target.value) || 1)
+                        }
+                      />
+                      <span className='text-muted-foreground text-sm'>
+                        {t('seconds')}
+                      </span>
+                    </div>
+                  </FormControl>
+                  <FormDescription>
+                    {t('How long a request can wait for an upstream send slot')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='AwsBedrockRateLimitQueueMaxSize'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Max queued requests')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      max={2147483647}
+                      step={1}
+                      {...field}
+                      onChange={(e) =>
+                        field.onChange(Number.parseInt(e.target.value) || 0)
+                      }
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {t('Maximum waiting requests, 0 = unlimited')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
         </SettingsForm>
       </Form>
     </SettingsSection>

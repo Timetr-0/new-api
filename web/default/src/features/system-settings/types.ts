@@ -374,6 +374,10 @@ export type SecuritySettings = {
   ModelRequestRateLimitSuccessCount: string
   ModelRequestRateLimitDurationMinutes: number
   ModelRequestRateLimitGroup: string
+  AwsBedrockRateLimitEnabled: boolean
+  AwsBedrockRateLimitCount: string
+  AwsBedrockRateLimitQueueTimeoutSeconds: number
+  AwsBedrockRateLimitQueueMaxSize: number
   CheckSensitiveEnabled: boolean
   CheckSensitiveOnPromptEnabled: boolean
   SensitiveWords: string

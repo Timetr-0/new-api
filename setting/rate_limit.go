@@ -19,6 +19,12 @@ var ModelRequestRateLimitSuccessCountSpec = "1000"
 var ModelRequestRateLimitGroup = map[string][2]string{}
 var ModelRequestRateLimitMutex sync.RWMutex
 
+var AwsBedrockRateLimitEnabled = false
+var AwsBedrockRateLimitCount = 0
+var AwsBedrockRateLimitCountSpec = "0"
+var AwsBedrockRateLimitQueueTimeoutSeconds = 30
+var AwsBedrockRateLimitQueueMaxSize = 0
+
 func ModelRequestRateLimitGroup2JSONString() string {
 	ModelRequestRateLimitMutex.RLock()
 	defer ModelRequestRateLimitMutex.RUnlock()
@@ -107,6 +113,17 @@ func CheckPositiveRateLimitIntegerValue(name string, raw string) error {
 	}
 	if value < 1 || value > math.MaxInt32 {
 		return fmt.Errorf("%s must be between 1 and 2147483647", name)
+	}
+	return nil
+}
+
+func CheckOptionalRateLimitIntegerValue(name string, raw string) error {
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return fmt.Errorf("%s must be a non-negative integer", name)
+	}
+	if value < 0 || value > math.MaxInt32 {
+		return fmt.Errorf("%s must be between 0 and 2147483647", name)
 	}
 	return nil
 }

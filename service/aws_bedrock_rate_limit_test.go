@@ -1,0 +1,54 @@
+package service
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestAwsBedrockSlidingWindowLimiterRejectsBurstOverLimit(t *testing.T) {
+	limiter := &awsBedrockSlidingWindowLimiter{}
+	now := time.Unix(100, 0)
+
+	allowed, retryAfter := limiter.allow(2, time.Minute, now)
+	require.True(t, allowed)
+	assert.Zero(t, retryAfter)
+
+	allowed, retryAfter = limiter.allow(2, time.Minute, now.Add(time.Second))
+	require.True(t, allowed)
+	assert.Zero(t, retryAfter)
+
+	allowed, retryAfter = limiter.allow(2, time.Minute, now.Add(2*time.Second))
+	require.False(t, allowed)
+	assert.Equal(t, 58*time.Second, retryAfter)
+}
+
+func TestAwsBedrockSlidingWindowLimiterAllowsAfterWindowSlides(t *testing.T) {
+	limiter := &awsBedrockSlidingWindowLimiter{}
+	now := time.Unix(100, 0)
+
+	allowed, _ := limiter.allow(1, time.Minute, now)
+	require.True(t, allowed)
+
+	allowed, retryAfter := limiter.allow(1, time.Minute, now.Add(time.Minute))
+	require.True(t, allowed)
+	assert.Zero(t, retryAfter)
+}
+
+func TestAwsBedrockMemoryQueueLimit(t *testing.T) {
+	limiter := &awsBedrockSlidingWindowLimiter{}
+
+	entered, leave := limiter.enterQueue(1)
+	require.True(t, entered)
+
+	entered, leaveSecond := limiter.enterQueue(1)
+	require.False(t, entered)
+	leaveSecond()
+
+	leave()
+	entered, leaveThird := limiter.enterQueue(1)
+	require.True(t, entered)
+	leaveThird()
+}
