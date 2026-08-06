@@ -137,7 +137,7 @@ def create_mock_channel(
     mock_base_url: str,
     group: str,
     channel_name: str,
-) -> None:
+) -> int | None:
     if not args.admin_access_token and not args.admin_cookie:
         raise RuntimeError("--create-mock-channel requires --admin-access-token or --admin-cookie")
     if not group:
@@ -183,10 +183,14 @@ def create_mock_channel(
     result = admin_request(args, "POST", "/api/channel/", payload)
     if not result.get("success"):
         raise RuntimeError(f"create mock channel failed: {result.get('message') or result}")
+    channel_ids = find_mock_channel_ids(args, group, channel_name)
+    channel_id = max(channel_ids) if channel_ids else None
+    id_text = f" id={channel_id}" if channel_id is not None else ""
     print(
-        f"created mock AWS channel name={channel_name!r} group={group!r} "
+        f"created mock AWS channel{id_text} name={channel_name!r} group={group!r} "
         f"model={args.model!r} base_url={mock_base_url}"
     )
+    return channel_id
 
 
 def fix_channel_abilities(args: argparse.Namespace) -> None:
@@ -267,6 +271,10 @@ def build_request_targets(args: argparse.Namespace) -> list[RequestTarget]:
         RequestTarget(label=group, group=group, api_key=api_key)
         for group, api_key in zip(groups, api_keys)
     ]
+
+
+def append_specific_channel_id(api_key: str, channel_id: int) -> str:
+    return f"{api_key.strip()}-{channel_id}"
 
 
 def unique_groups(targets: list[RequestTarget]) -> list[str]:
@@ -455,6 +463,14 @@ def parse_args() -> argparse.Namespace:
         help="Wait after creating mock channels so distributor caches can refresh.",
     )
     parser.add_argument(
+        "--force-mock-channel",
+        action="store_true",
+        help=(
+            "Append the created mock channel ID to each API key to force routing. "
+            "The token user must be an admin."
+        ),
+    )
+    parser.add_argument(
         "--groups",
         default=os.getenv("NEW_API_TEST_GROUPS", ""),
         help="Comma-separated group labels matched one-to-one with --api-keys.",
@@ -493,6 +509,7 @@ def main() -> int:
     mock_server = None
     mock_state = None
     created_mock_channels: list[tuple[str, str]] = []
+    mock_channel_ids_by_group: dict[str, int] = {}
     exit_code = 0
     if args.mock_upstream or args.create_mock_channel:
         mock_server, mock_state, local_mock_url = start_mock_bedrock_server(
@@ -507,9 +524,23 @@ def main() -> int:
             groups = unique_groups(targets)
             for group in groups:
                 channel_name = mock_channel_name_for_group(args, group, len(groups))
-                create_mock_channel(args, mock_base_url, group, channel_name)
+                channel_id = create_mock_channel(args, mock_base_url, group, channel_name)
+                if channel_id is not None:
+                    mock_channel_ids_by_group[group] = channel_id
                 created_mock_channels.append((group, channel_name))
             fix_channel_abilities(args)
+            if args.force_mock_channel:
+                missing = [group for group in groups if group not in mock_channel_ids_by_group]
+                if missing:
+                    raise RuntimeError(
+                        "--force-mock-channel could not find created channel ids for groups: "
+                        + ",".join(missing)
+                    )
+                for target in targets:
+                    target.api_key = append_specific_channel_id(
+                        target.api_key, mock_channel_ids_by_group[target.group]
+                    )
+                print("forced requests to created mock channel ids")
             if args.channel_warmup_seconds > 0:
                 print(f"waiting {args.channel_warmup_seconds:g}s for channel cache warmup")
                 time.sleep(args.channel_warmup_seconds)
@@ -594,6 +625,15 @@ def main() -> int:
                 print(f"mock_upstream_arrival_offsets_s=[{preview}]")
             else:
                 print("mock_upstream_received=0")
+                if any(
+                    "InvokeModel" in item.body or "Bedrock Runtime" in item.body
+                    for item in results
+                ):
+                    print(
+                        "diagnostic: responses came from the AWS SDK path, so the mock "
+                        "channel was not selected or the selected channel is not using "
+                        "aws_key_type=api_key. Try --force-mock-channel with an admin token."
+                    )
     finally:
         if created_mock_channels and not args.keep_mock_channel:
             try:
