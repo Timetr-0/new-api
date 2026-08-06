@@ -305,7 +305,7 @@ func UpdateOption(c *gin.Context) {
 			return
 		}
 	case "AwsBedrockRateLimitPerSecondCount":
-		err = setting.CheckOptionalRateLimitIntegerValue(option.Key, option.Value.(string))
+		err = setting.CheckOptionalRateLimitValue(option.Key, option.Value.(string))
 		if err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,

@@ -128,7 +128,15 @@ func WaitAwsBedrockRateLimit(c *gin.Context) *types.NewAPIError {
 			types.ErrOptionWithSkipRetry(),
 		)
 	}
-	secondLimit := setting.AwsBedrockRateLimitPerSecondCount
+	secondLimit, err := common.ResolveRateLimitSpec("AWS_BEDROCK_RATE_LIMIT_PER_SECOND", setting.AwsBedrockRateLimitPerSecondCountSpec, true)
+	if err != nil {
+		return types.NewOpenAIError(
+			fmt.Errorf("aws bedrock per-second rate limit config invalid: %w", err),
+			types.ErrorCodeRateLimitExceeded,
+			http.StatusInternalServerError,
+			types.ErrOptionWithSkipRetry(),
+		)
+	}
 	if minuteLimit <= 0 && secondLimit <= 0 {
 		return nil
 	}

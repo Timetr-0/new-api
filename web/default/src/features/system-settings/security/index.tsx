@@ -35,7 +35,7 @@ const defaultSecuritySettings: SecuritySettings = {
   ModelRequestRateLimitGroup: '',
   AwsBedrockRateLimitEnabled: false,
   AwsBedrockRateLimitCount: '0',
-  AwsBedrockRateLimitPerSecondCount: 0,
+  AwsBedrockRateLimitPerSecondCount: '0',
   AwsBedrockRateLimitQueueTimeoutSeconds: 30,
   AwsBedrockRateLimitQueueMaxSize: 0,
   CheckSensitiveEnabled: false,

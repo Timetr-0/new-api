@@ -137,7 +137,11 @@ const createRateLimitSchema = (t: (key: string) => string) =>
       .refine((value) => isValidRateLimitSpec(value, true), {
         message: t('Invalid JSON format or values out of allowed range'),
       }),
-    AwsBedrockRateLimitPerSecondCount: z.number().min(0).max(2147483647),
+    AwsBedrockRateLimitPerSecondCount: z
+      .string()
+      .refine((value) => isValidRateLimitSpec(value, true), {
+        message: t('Invalid JSON format or values out of allowed range'),
+      }),
     AwsBedrockRateLimitQueueTimeoutSeconds: z
       .number()
       .min(1)
@@ -524,14 +528,9 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                   <FormControl>
                     <div className='flex items-center gap-2'>
                       <Input
-                        type='number'
-                        min={0}
-                        max={2147483647}
-                        step={1}
+                        type='text'
+                        placeholder='N(1,std=0)'
                         {...field}
-                        onChange={(e) =>
-                          field.onChange(Number.parseInt(e.target.value) || 0)
-                        }
                       />
                       <span className='text-muted-foreground text-sm'>
                         {t('times')}
@@ -540,7 +539,7 @@ export function RateLimitSection({ defaultValues }: RateLimitSectionProps) {
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'Controls short-burst speed before the per-minute limit, 0 = unlimited'
+                      'Sampled once per minute when using N(mean,std=stddev), 0 = unlimited'
                     )}
                   </FormDescription>
                   <FormMessage />
