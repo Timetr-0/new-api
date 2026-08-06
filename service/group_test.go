@@ -23,3 +23,19 @@ func TestGetUserAutoGroupUsesConfiguredAutoGroupsWithoutUsableGroupIntersection(
 
 	assert.Equal(t, []string{"accountC", "accountD", "accountE"}, got)
 }
+
+func TestGetUserAutoGroupByNameUsesConfiguredAutoGroupName(t *testing.T) {
+	originAutoGroups := setting.AutoGroups2JsonString()
+	t.Cleanup(func() {
+		require.NoError(t, setting.UpdateAutoGroupsByJsonString(originAutoGroups))
+	})
+
+	require.NoError(t, setting.UpdateAutoGroupsByJsonString(`{
+		"auto": ["accountA"],
+		"auto_eu": ["accountC", "auto", "accountD"]
+	}`))
+
+	assert.Equal(t, []string{"accountA"}, GetUserAutoGroup("default"))
+	assert.Equal(t, []string{"accountC", "accountD"}, GetUserAutoGroupByName("default", "auto_eu"))
+	assert.Empty(t, GetUserAutoGroupByName("default", "auto_missing"))
+}

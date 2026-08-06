@@ -1,7 +1,7 @@
 package service
 
 import (
-	"errors"
+	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -49,8 +49,8 @@ func (p *RetryParam) ResetRetryNextTry() {
 // CacheGetRandomSatisfiedChannel tries to get a random channel that satisfies the requirements.
 // 尝试获取一个满足要求的随机渠道。
 //
-// For "auto" tokenGroup with cross-group Retry enabled:
-// 对于启用了跨分组重试的 "auto" tokenGroup：
+// For auto tokenGroups with cross-group Retry enabled:
+// 对于启用了跨分组重试的自动分组：
 //
 //   - Each group will exhaust all its priorities before moving to the next group.
 //     每个分组会用完所有优先级后才会切换到下一个分组。
@@ -87,11 +87,11 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	selectGroup := param.TokenGroup
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
 
-	if param.TokenGroup == "auto" {
-		if len(setting.GetAutoGroups()) == 0 {
-			return nil, selectGroup, errors.New("auto groups is not enabled")
+	if setting.IsAutoGroup(param.TokenGroup) {
+		autoGroups := GetUserAutoGroupByName(userGroup, param.TokenGroup)
+		if len(autoGroups) == 0 {
+			return nil, selectGroup, fmt.Errorf("%s groups is not enabled", param.TokenGroup)
 		}
-		autoGroups := GetUserAutoGroup(userGroup)
 
 		// startGroupIndex: the group index to start searching from
 		// startGroupIndex: 开始搜索的分组索引

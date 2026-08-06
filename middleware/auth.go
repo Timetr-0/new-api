@@ -426,11 +426,14 @@ func TokenAuth() func(c *gin.Context) {
 				return
 			}
 			// check group in common.GroupRatio
-			if !ratio_setting.ContainsGroupRatio(tokenGroup) {
-				if tokenGroup != "auto" {
-					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组 %s 已被弃用", tokenGroup))
+			if service.IsAutoGroup(tokenGroup) {
+				if !service.IsConfiguredAutoGroup(tokenGroup) {
+					abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("自动分组 %s 未启用", tokenGroup))
 					return
 				}
+			} else if !ratio_setting.ContainsGroupRatio(tokenGroup) {
+				abortWithOpenAiMessage(c, http.StatusForbidden, fmt.Sprintf("分组 %s 已被弃用", tokenGroup))
+				return
 			}
 			userGroup = tokenGroup
 		}

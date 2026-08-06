@@ -41,12 +41,25 @@ func GroupInUserUsableGroups(userGroup, groupName string) bool {
 	return ok
 }
 
+func IsAutoGroup(group string) bool {
+	return setting.IsAutoGroup(group)
+}
+
+func IsConfiguredAutoGroup(group string) bool {
+	return setting.ContainsAutoGroup(group)
+}
+
 // GetUserAutoGroup 根据用户分组获取自动分组设置
 func GetUserAutoGroup(userGroup string) []string {
-	configuredGroups := setting.GetAutoGroups()
-	autoGroups := make([]string, len(configuredGroups))
-	copy(autoGroups, configuredGroups)
-	return autoGroups
+	return GetUserAutoGroupByName(userGroup, setting.DefaultAutoGroupName)
+}
+
+func GetUserAutoGroupByName(userGroup, autoGroup string) []string {
+	return setting.GetAutoGroupsForGroup(autoGroup)
+}
+
+func GetAutoGroupNames() []string {
+	return setting.GetAutoGroupNames()
 }
 
 // GetUserGroupRatio 获取用户使用某个分组的倍率

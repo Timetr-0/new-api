@@ -103,6 +103,19 @@ function createJsonStringField(
   })
 }
 
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+function isAutoGroupsConfig(value: unknown): boolean {
+  if (isStringArray(value)) return true
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+
+  return Object.entries(value).every(
+    ([name, groups]) => name.trim().startsWith('auto') && isStringArray(groups)
+  )
+}
+
 const createModelSchema = (t: Translate) =>
   z.object({
     ModelPrice: createJsonStringField(t),
@@ -125,10 +138,9 @@ const createGroupSchema = (t: Translate) =>
     UserUsableGroups: createJsonStringField(t),
     GroupGroupRatio: createJsonStringField(t),
     AutoGroups: createJsonStringField(t, {
-      predicate: (parsed) =>
-        Array.isArray(parsed) &&
-        parsed.every((item) => typeof item === 'string'),
-      predicateMessage: 'Expected a JSON array of group identifiers',
+      predicate: isAutoGroupsConfig,
+      predicateMessage:
+        'Expected a JSON array, or a JSON object whose keys start with auto and whose values are group arrays',
     }),
     DefaultUseAutoGroup: z.boolean(),
     GroupSpecialUsableGroup: createJsonStringField(t),

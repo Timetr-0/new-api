@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
+	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -19,7 +20,7 @@ func GetPerfMetricsSummary(c *gin.Context) {
 		}
 	}
 
-	activeGroups := append(lo.Keys(ratio_setting.GetGroupRatioCopy()), "auto")
+	activeGroups := append(lo.Keys(ratio_setting.GetGroupRatioCopy()), setting.GetAutoGroupNames()...)
 	result, err := perfmetrics.QuerySummaryAll(hours, activeGroups)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -75,8 +76,13 @@ func GetPerfMetrics(c *gin.Context) {
 
 func filterActiveGroups(groups []perfmetrics.GroupResult) []perfmetrics.GroupResult {
 	activeRatios := ratio_setting.GetGroupRatioCopy()
+	activeAutoGroups := make(map[string]bool)
+	for _, group := range setting.GetAutoGroupNames() {
+		activeAutoGroups[group] = true
+	}
 	return lo.Filter(groups, func(g perfmetrics.GroupResult, _ int) bool {
 		_, ok := activeRatios[g.Group]
-		return ok || g.Group == "auto"
+		_, autoOk := activeAutoGroups[g.Group]
+		return ok || autoOk
 	})
 }

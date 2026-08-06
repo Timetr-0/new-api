@@ -94,6 +94,8 @@ type RegistryEntry = {
   ratio: number
 }
 
+type AutoGroupsConfig = string[] | Record<string, string[]>
+
 const sectionCardClassName =
   'relative shadow-sm ring-0 before:pointer-events-none before:absolute before:inset-0 before:rounded-xl before:border before:border-border/90'
 const sectionHeaderClassName = 'border-b bg-muted/20'
@@ -130,6 +132,42 @@ function parseNestedRatioMap(
     fallback: {},
     silent: true,
   })
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+function isAutoGroupsObject(value: unknown): value is Record<string, string[]> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  return Object.values(value).every(isStringArray)
+}
+
+function parseAutoGroupsConfig(value: string): AutoGroupsConfig {
+  const parsed = safeJsonParse<unknown>(value, {
+    fallback: [],
+    context: 'auto groups',
+  })
+  if (isStringArray(parsed)) return parsed
+  if (isAutoGroupsObject(parsed)) return parsed
+  return []
+}
+
+function getDefaultAutoGroupsList(config: AutoGroupsConfig): string[] {
+  if (Array.isArray(config)) return config
+  return config.auto ?? []
+}
+
+function serializeDefaultAutoGroups(
+  config: AutoGroupsConfig,
+  groups: string[]
+): string {
+  if (Array.isArray(config)) {
+    return JSON.stringify(groups, null, 2)
+  }
+  return JSON.stringify({ ...config, auto: groups }, null, 2)
 }
 
 function buildGroupPricingRows(
@@ -284,27 +322,31 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   )
 
   // Auto groups
-  const autoGroupsList = useMemo(() => {
-    return safeJsonParse<string[]>(autoGroups, {
-      fallback: [],
-      context: 'auto groups',
-    })
+  const autoGroupsConfig = useMemo(() => {
+    return parseAutoGroupsConfig(autoGroups)
   }, [autoGroups])
+
+  const autoGroupsList = useMemo(() => {
+    return getDefaultAutoGroupsList(autoGroupsConfig)
+  }, [autoGroupsConfig])
 
   const handleAutoGroupAdd = useCallback(
     (name: string) => {
       if (autoGroupsList.includes(name)) return
-      onChange('AutoGroups', JSON.stringify([...autoGroupsList, name], null, 2))
+      onChange(
+        'AutoGroups',
+        serializeDefaultAutoGroups(autoGroupsConfig, [...autoGroupsList, name])
+      )
     },
-    [autoGroupsList, onChange]
+    [autoGroupsConfig, autoGroupsList, onChange]
   )
 
   const handleAutoGroupDelete = useCallback(
     (index: number) => {
       const list = autoGroupsList.filter((_, i) => i !== index)
-      onChange('AutoGroups', JSON.stringify(list, null, 2))
+      onChange('AutoGroups', serializeDefaultAutoGroups(autoGroupsConfig, list))
     },
-    [autoGroupsList, onChange]
+    [autoGroupsConfig, autoGroupsList, onChange]
   )
 
   const handleAutoGroupMove = useCallback(
@@ -313,13 +355,17 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
       const newIndex = direction === 'up' ? index - 1 : index + 1
       if (newIndex < 0 || newIndex >= list.length) return
       ;[list[index], list[newIndex]] = [list[newIndex], list[index]]
-      onChange('AutoGroups', JSON.stringify(list, null, 2))
+      onChange('AutoGroups', serializeDefaultAutoGroups(autoGroupsConfig, list))
     },
-    [autoGroupsList, onChange]
+    [autoGroupsConfig, autoGroupsList, onChange]
   )
 
   const autoGroupCandidates = useMemo(
-    () => registryNames.filter((name) => !autoGroupsList.includes(name)),
+    () =>
+      registryNames.filter(
+        (name) =>
+          !name.trim().startsWith('auto') && !autoGroupsList.includes(name)
+      ),
     [registryNames, autoGroupsList]
   )
 

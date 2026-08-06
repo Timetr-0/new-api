@@ -298,7 +298,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
                   </FormControl>
                   <FormDescription>
                     {t(
-                      'JSON array of group identifiers. When enabled below, new tokens rotate through this list.'
+                      'JSON array for the default auto group, or an object map like {"auto":["default"],"auto_eu":["eu"]}. Targets starting with auto are ignored.'
                     )}
                   </FormDescription>
                   <FormMessage />

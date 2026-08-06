@@ -5,7 +5,6 @@ import (
 
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
-	"github.com/QuantumNous/new-api/setting"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -38,10 +37,12 @@ func GetUserGroups(c *gin.Context) {
 			}
 		}
 	}
-	if _, ok := userUsableGroups["auto"]; ok {
-		usableGroups["auto"] = map[string]interface{}{
-			"ratio": "自动",
-			"desc":  setting.GetUsableGroupDescription("auto"),
+	for _, autoGroupName := range service.GetAutoGroupNames() {
+		if desc, ok := userUsableGroups[autoGroupName]; ok {
+			usableGroups[autoGroupName] = map[string]interface{}{
+				"ratio": "自动",
+				"desc":  desc,
+			}
 		}
 	}
 	c.JSON(http.StatusOK, gin.H{

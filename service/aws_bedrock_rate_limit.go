@@ -190,7 +190,7 @@ func awsBedrockRateLimitGroup(c *gin.Context) string {
 	if group == "" {
 		group = common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
 	}
-	if group == "" || group == "auto" {
+	if group == "" || setting.IsAutoGroup(group) {
 		return awsBedrockRateLimitDefaultGroup
 	}
 	return group
@@ -342,7 +342,7 @@ func awsBedrockRateLimitQueueKey(group string) string {
 
 func awsBedrockRateLimitGroupKey(group string) string {
 	group = strings.TrimSpace(group)
-	if group == "" || group == "auto" {
+	if group == "" || setting.IsAutoGroup(group) {
 		group = awsBedrockRateLimitDefaultGroup
 	}
 	return url.QueryEscape(group)

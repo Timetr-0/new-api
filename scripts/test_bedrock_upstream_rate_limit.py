@@ -21,12 +21,21 @@ from typing import Any
 @dataclass
 class Result:
     index: int
+    target_label: str
+    group: str
     scheduled_at: float
     started_at: float
     ended_at: float
     status: int | None
     body: str
     error: str
+
+
+@dataclass
+class RequestTarget:
+    label: str
+    group: str
+    api_key: str
 
 
 class MockBedrockState:
@@ -123,20 +132,25 @@ def admin_request(
     return json.loads(data)
 
 
-def create_mock_channel(args: argparse.Namespace, mock_base_url: str) -> None:
+def create_mock_channel(
+    args: argparse.Namespace,
+    mock_base_url: str,
+    group: str,
+    channel_name: str,
+) -> None:
     if not args.admin_access_token and not args.admin_cookie:
         raise RuntimeError("--create-mock-channel requires --admin-access-token or --admin-cookie")
-    if not args.group:
-        raise RuntimeError("--create-mock-channel requires --group")
+    if not group:
+        raise RuntimeError("--create-mock-channel requires --group or --groups")
 
     channel = {
-        "name": args.mock_channel_name,
+        "name": channel_name,
         "type": 33,
         "base_url": mock_base_url,
         "key": f"{args.mock_api_key}|{args.mock_region}",
         "openai_organization": None,
         "models": args.model,
-        "group": args.group,
+        "group": group,
         "model_mapping": None,
         "priority": args.mock_channel_priority,
         "weight": args.mock_channel_weight,
@@ -170,16 +184,16 @@ def create_mock_channel(args: argparse.Namespace, mock_base_url: str) -> None:
     if not result.get("success"):
         raise RuntimeError(f"create mock channel failed: {result.get('message') or result}")
     print(
-        f"created mock AWS channel name={args.mock_channel_name!r} "
+        f"created mock AWS channel name={channel_name!r} group={group!r} "
         f"model={args.model!r} base_url={mock_base_url}"
     )
 
 
-def find_mock_channel_ids(args: argparse.Namespace) -> list[int]:
+def find_mock_channel_ids(args: argparse.Namespace, group: str, channel_name: str) -> list[int]:
     query = urllib.parse.urlencode(
         {
-            "keyword": args.mock_channel_name,
-            "group": args.group,
+            "keyword": channel_name,
+            "group": group,
             "model": args.model,
             "type": 33,
             "page_size": 100,
@@ -193,21 +207,72 @@ def find_mock_channel_ids(args: argparse.Namespace) -> list[int]:
     items = data.get("items") or []
     ids: list[int] = []
     for item in items:
-        if item.get("name") == args.mock_channel_name and item.get("type") == 33:
+        if item.get("name") == channel_name and item.get("type") == 33:
             channel_id = item.get("id")
             if isinstance(channel_id, int):
                 ids.append(channel_id)
     return ids
 
 
-def delete_mock_channels(args: argparse.Namespace) -> None:
-    for channel_id in find_mock_channel_ids(args):
-        result = admin_request(args, "DELETE", f"/api/channel/{channel_id}")
-        if not result.get("success"):
-            raise RuntimeError(
-                f"delete mock channel {channel_id} failed: {result.get('message') or result}"
-            )
-        print(f"deleted mock AWS channel id={channel_id}")
+def delete_mock_channels(args: argparse.Namespace, channels: list[tuple[str, str]]) -> None:
+    for group, channel_name in channels:
+        for channel_id in find_mock_channel_ids(args, group, channel_name):
+            result = admin_request(args, "DELETE", f"/api/channel/{channel_id}")
+            if not result.get("success"):
+                raise RuntimeError(
+                    f"delete mock channel {channel_id} failed: {result.get('message') or result}"
+                )
+            print(f"deleted mock AWS channel id={channel_id} group={group!r}")
+
+
+def parse_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def sanitize_name_part(value: str) -> str:
+    sanitized = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in value)
+    return sanitized.strip("-") or "group"
+
+
+def build_request_targets(args: argparse.Namespace) -> list[RequestTarget]:
+    groups = parse_csv(args.groups) if args.groups else parse_csv(args.group)
+    api_keys = parse_csv(args.api_keys) if args.api_keys else parse_csv(args.api_key)
+
+    if not groups:
+        raise ValueError("missing --group or --groups")
+    if not api_keys:
+        raise ValueError("missing --api-key/--api-keys or NEW_API_API_KEY/NEW_API_API_KEYS")
+
+    if len(groups) == 1 and len(api_keys) > 1:
+        return [
+            RequestTarget(label=f"{groups[0]}#{index + 1}", group=groups[0], api_key=api_key)
+            for index, api_key in enumerate(api_keys)
+        ]
+
+    if len(groups) != len(api_keys):
+        raise ValueError("--groups and --api-keys must have the same count for multi-group tests")
+
+    return [
+        RequestTarget(label=group, group=group, api_key=api_key)
+        for group, api_key in zip(groups, api_keys)
+    ]
+
+
+def unique_groups(targets: list[RequestTarget]) -> list[str]:
+    seen: set[str] = set()
+    groups: list[str] = []
+    for target in targets:
+        if target.group in seen:
+            continue
+        seen.add(target.group)
+        groups.append(target.group)
+    return groups
+
+
+def mock_channel_name_for_group(args: argparse.Namespace, group: str, group_count: int) -> str:
+    if group_count == 1:
+        return args.mock_channel_name
+    return f"{args.mock_channel_name}-{sanitize_name_part(group)}"
 
 
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
@@ -244,7 +309,12 @@ def endpoint_path(request_format: str) -> str:
     return "/v1/chat/completions"
 
 
-def post_once(args: argparse.Namespace, index: int, scheduled_at: float) -> Result:
+def post_once(
+    args: argparse.Namespace,
+    target: RequestTarget,
+    index: int,
+    scheduled_at: float,
+) -> Result:
     now = time.monotonic()
     if scheduled_at > now:
         time.sleep(scheduled_at - now)
@@ -254,7 +324,7 @@ def post_once(args: argparse.Namespace, index: int, scheduled_at: float) -> Resu
     data = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     url = args.base_url.rstrip("/") + endpoint_path(args.format)
     headers = {
-        "Authorization": "Bearer " + args.api_key,
+        "Authorization": "Bearer " + target.api_key,
         "Content-Type": "application/json",
         "User-Agent": "new-api-bedrock-rate-limit-test/1.0",
     }
@@ -278,6 +348,8 @@ def post_once(args: argparse.Namespace, index: int, scheduled_at: float) -> Resu
 
     return Result(
         index=index,
+        target_label=target.label,
+        group=target.group,
         scheduled_at=scheduled_at,
         started_at=started_at,
         ended_at=time.monotonic(),
@@ -316,7 +388,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--api-key",
         default=os.getenv("NEW_API_API_KEY", os.getenv("NEW_API_KEY", "")),
-        help="New API token, default: NEW_API_API_KEY or NEW_API_KEY.",
+        help="New API token, default: NEW_API_API_KEY or NEW_API_KEY. Use --api-keys for multi-group tests.",
+    )
+    parser.add_argument(
+        "--api-keys",
+        default=os.getenv("NEW_API_API_KEYS", ""),
+        help="Comma-separated New API tokens matched one-to-one with --groups.",
     )
     parser.add_argument(
         "--model",
@@ -361,6 +438,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--admin-user-id", default=os.getenv("NEW_API_USER_ID", ""))
     parser.add_argument("--group", default=os.getenv("NEW_API_TEST_GROUP", "default"))
     parser.add_argument(
+        "--groups",
+        default=os.getenv("NEW_API_TEST_GROUPS", ""),
+        help="Comma-separated group labels matched one-to-one with --api-keys.",
+    )
+    parser.add_argument(
         "--mock-channel-name",
         default=f"bedrock-rate-limit-test-{int(time.time())}",
     )
@@ -379,8 +461,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    if not args.api_key:
-        print("missing --api-key or NEW_API_API_KEY", file=sys.stderr)
+    try:
+        targets = build_request_targets(args)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return 2
     if args.count < 1:
         print("--count must be positive", file=sys.stderr)
@@ -391,7 +475,7 @@ def main() -> int:
 
     mock_server = None
     mock_state = None
-    created_mock_channel = False
+    created_mock_channels: list[tuple[str, str]] = []
     exit_code = 0
     if args.mock_upstream or args.create_mock_channel:
         mock_server, mock_state, local_mock_url = start_mock_bedrock_server(
@@ -403,8 +487,11 @@ def main() -> int:
         print(f"mock_bedrock_local_url={local_mock_url}")
         print(f"mock_bedrock_channel_base_url={mock_base_url}")
         if args.create_mock_channel:
-            create_mock_channel(args, mock_base_url)
-            created_mock_channel = True
+            groups = unique_groups(targets)
+            for group in groups:
+                channel_name = mock_channel_name_for_group(args, group, len(groups))
+                create_mock_channel(args, mock_base_url, group, channel_name)
+                created_mock_channels.append((group, channel_name))
 
     try:
         interval = 60.0 / args.rpm
@@ -413,16 +500,18 @@ def main() -> int:
 
         print(
             f"base_url={args.base_url} format={args.format} model={args.model} "
-            f"count={args.count} rpm={args.rpm:g} interval={interval:.3f}s"
+            f"count={args.count} rpm={args.rpm:g} interval={interval:.3f}s "
+            f"targets={','.join(target.label for target in targets)}"
         )
-        print("idx status start_s latency_s body")
+        print("idx target status start_s latency_s body")
 
         results: list[Result] = []
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = []
             for index in range(1, args.count + 1):
                 scheduled_at = start + (index - 1) * interval
-                futures.append(executor.submit(post_once, args, index, scheduled_at))
+                target = targets[(index - 1) % len(targets)]
+                futures.append(executor.submit(post_once, args, target, index, scheduled_at))
 
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
@@ -431,7 +520,10 @@ def main() -> int:
                 latency_s = result.ended_at - result.started_at
                 status = result.status if result.status is not None else "ERR"
                 detail = short_body(result.body or result.error)
-                print(f"{result.index:03d} {status} {start_s:8.2f} {latency_s:9.2f} {detail}")
+                print(
+                    f"{result.index:03d} {result.target_label:>12} {status} "
+                    f"{start_s:8.2f} {latency_s:9.2f} {detail}"
+                )
 
         results.sort(key=lambda item: item.index)
         ok_count = sum(1 for item in results if item.status is not None and 200 <= item.status < 300)
@@ -447,10 +539,22 @@ def main() -> int:
             f"rate_limited_429={rate_limited_count} other={error_count} "
             f"p50_latency={p50:.2f}s p95_latency={p95:.2f}s"
         )
+        for target in targets:
+            target_results = [item for item in results if item.target_label == target.label]
+            target_ok = sum(
+                1 for item in target_results if item.status is not None and 200 <= item.status < 300
+            )
+            target_rate_limited = sum(1 for item in target_results if item.status == 429)
+            target_other = len(target_results) - target_ok - target_rate_limited
+            print(
+                f"target_summary target={target.label} group={target.group} "
+                f"total={len(target_results)} ok={target_ok} "
+                f"rate_limited_429={target_rate_limited} other={target_other}"
+            )
         print(
-            "expected: with AWS Bedrock base limit=10/min and one enabled AWS channel "
-            "in the effective group, only about the first 10 should be fast. "
-            "With N enabled AWS channels, the effective limit is 10*N/min."
+            "expected: per effective group limit = base limit * enabled AWS channel count. "
+            "If two effective groups each have one enabled AWS channel and base limit=10/min, "
+            "the shared mock upstream should receive up to about 20 requests per 60s window."
         )
         if mock_state is not None:
             with mock_state.lock:
@@ -470,9 +574,9 @@ def main() -> int:
             else:
                 print("mock_upstream_received=0")
     finally:
-        if created_mock_channel and not args.keep_mock_channel:
+        if created_mock_channels and not args.keep_mock_channel:
             try:
-                delete_mock_channels(args)
+                delete_mock_channels(args, created_mock_channels)
             except Exception as exc:  # noqa: BLE001
                 print(f"cleanup mock channel failed: {exc}", file=sys.stderr)
                 exit_code = 1

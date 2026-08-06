@@ -291,7 +291,10 @@ func Register(c *gin.Context) {
 			ModelLimitsEnabled: false,
 		}
 		if setting.DefaultUseAutoGroup {
-			token.Group = "auto"
+			autoGroupNames := setting.GetAutoGroupNames()
+			if len(autoGroupNames) > 0 {
+				token.Group = autoGroupNames[0]
+			}
 		}
 		if err := token.Insert(); err != nil {
 			common.ApiErrorI18n(c, i18n.MsgCreateDefaultTokenErr)

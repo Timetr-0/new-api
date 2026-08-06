@@ -128,12 +128,16 @@ export function ApiKeysMutateDrawer({
       ratio: info.ratio,
     })
   )
-  const backendHasAuto = groups.some((g) => g.value === 'auto')
+  const preferredAutoGroup = groups.find((g) => g.value === 'auto')
+  const firstAutoGroup = groups.find((g) => g.value.trim().startsWith('auto'))
+  const defaultAutoGroup = defaultUseAutoGroup
+    ? (preferredAutoGroup?.value ?? firstAutoGroup?.value)
+    : undefined
   const schema = getApiKeyFormSchema(t)
 
   const form = useForm<ApiKeyFormValues>({
     resolver: zodResolver(schema),
-    defaultValues: getApiKeyFormDefaultValues(defaultUseAutoGroup),
+    defaultValues: getApiKeyFormDefaultValues(defaultAutoGroup),
   })
 
   // Load existing data when updating
@@ -145,11 +149,9 @@ export function ApiKeysMutateDrawer({
         }
       })
     } else if (open && !isUpdate) {
-      form.reset(
-        getApiKeyFormDefaultValues(defaultUseAutoGroup && backendHasAuto)
-      )
+      form.reset(getApiKeyFormDefaultValues(defaultAutoGroup))
     }
-  }, [open, isUpdate, currentRow, form, defaultUseAutoGroup, backendHasAuto])
+  }, [open, isUpdate, currentRow, form, defaultAutoGroup])
 
   // Correct group after groups load: if the form value is not in available groups, fall back
   useEffect(() => {
@@ -161,7 +163,7 @@ export function ApiKeysMutateDrawer({
         groups[0]?.value ??
         ''
       form.setValue('group', fallback)
-      if (currentGroup === 'auto') {
+      if (currentGroup.trim().startsWith('auto')) {
         form.setValue('cross_group_retry', false)
       }
     }
