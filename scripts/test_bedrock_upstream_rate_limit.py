@@ -294,6 +294,12 @@ def mock_channel_name_for_group(args: argparse.Namespace, group: str, group_coun
     return f"{args.mock_channel_name}-{sanitize_name_part(group)}"
 
 
+def mock_channel_name_for_index(base_name: str, index: int, count: int) -> str:
+    if count == 1:
+        return base_name
+    return f"{base_name}-{index + 1}"
+
+
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
     if args.format == "claude":
         return {
@@ -481,6 +487,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--mock-channel-priority", type=int, default=999999)
     parser.add_argument("--mock-channel-weight", type=int, default=100)
+    parser.add_argument(
+        "--mock-channels-per-group",
+        type=int,
+        default=1,
+        help="Number of temporary mock AWS channels to create for each group.",
+    )
     parser.add_argument("--mock-channel-tag", default="rate-limit-test")
     parser.add_argument("--mock-api-key", default="mock-bedrock-api-key")
     parser.add_argument("--mock-region", default="us-east-1")
@@ -505,11 +517,14 @@ def main() -> int:
     if args.rpm <= 0:
         print("--rpm must be positive", file=sys.stderr)
         return 2
+    if args.mock_channels_per_group < 1:
+        print("--mock-channels-per-group must be positive", file=sys.stderr)
+        return 2
 
     mock_server = None
     mock_state = None
     created_mock_channels: list[tuple[str, str]] = []
-    mock_channel_ids_by_group: dict[str, int] = {}
+    mock_channel_ids_by_group: dict[str, list[int]] = {}
     exit_code = 0
     if args.mock_upstream or args.create_mock_channel:
         mock_server, mock_state, local_mock_url = start_mock_bedrock_server(
@@ -523,14 +538,20 @@ def main() -> int:
         if args.create_mock_channel:
             groups = unique_groups(targets)
             for group in groups:
-                channel_name = mock_channel_name_for_group(args, group, len(groups))
-                channel_id = create_mock_channel(args, mock_base_url, group, channel_name)
-                if channel_id is not None:
-                    mock_channel_ids_by_group[group] = channel_id
-                created_mock_channels.append((group, channel_name))
+                base_channel_name = mock_channel_name_for_group(args, group, len(groups))
+                for channel_index in range(args.mock_channels_per_group):
+                    channel_name = mock_channel_name_for_index(
+                        base_channel_name,
+                        channel_index,
+                        args.mock_channels_per_group,
+                    )
+                    channel_id = create_mock_channel(args, mock_base_url, group, channel_name)
+                    if channel_id is not None:
+                        mock_channel_ids_by_group.setdefault(group, []).append(channel_id)
+                    created_mock_channels.append((group, channel_name))
             fix_channel_abilities(args)
             if args.force_mock_channel:
-                missing = [group for group in groups if group not in mock_channel_ids_by_group]
+                missing = [group for group in groups if not mock_channel_ids_by_group.get(group)]
                 if missing:
                     raise RuntimeError(
                         "--force-mock-channel could not find created channel ids for groups: "
@@ -538,9 +559,9 @@ def main() -> int:
                     )
                 for target in targets:
                     target.api_key = append_specific_channel_id(
-                        target.api_key, mock_channel_ids_by_group[target.group]
+                        target.api_key, mock_channel_ids_by_group[target.group][0]
                     )
-                print("forced requests to created mock channel ids")
+                print("forced requests to the first created mock channel id for each group")
             if args.channel_warmup_seconds > 0:
                 print(f"waiting {args.channel_warmup_seconds:g}s for channel cache warmup")
                 time.sleep(args.channel_warmup_seconds)
@@ -605,8 +626,8 @@ def main() -> int:
             )
         print(
             "expected: per effective group limit = base limit * enabled AWS channel count. "
-            "If two effective groups each have one enabled AWS channel and base limit=10/min, "
-            "the shared mock upstream should receive up to about 20 requests per 60s window."
+            "If two effective groups each have two enabled AWS channels and base limit=10/min, "
+            "the shared mock upstream should receive up to about 40 requests per 60s window."
         )
         if mock_state is not None:
             with mock_state.lock:
