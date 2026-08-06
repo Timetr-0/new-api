@@ -9,7 +9,6 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
-	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -48,33 +47,24 @@ func GetGroupEnabledModels(group string) []string {
 	return models
 }
 
-func CountEnabledChannelsByGroupModelAndType(group string, modelName string, channelType int) (int, error) {
+func CountEnabledChannelsByGroupAndType(group string, channelType int) (int, error) {
 	group = strings.TrimSpace(group)
-	modelName = strings.TrimSpace(modelName)
-	if group == "" || modelName == "" {
+	if group == "" {
 		return 0, nil
 	}
 
 	if common.MemoryCacheEnabled {
-		return countEnabledChannelsByGroupModelAndTypeCache(group, modelName, channelType), nil
+		return countEnabledChannelsByGroupAndTypeCache(group, channelType), nil
 	}
 
-	count, err := countEnabledChannelsByGroupModelAndTypeDB(group, modelName, channelType)
-	if err != nil || count > 0 {
-		return count, err
-	}
-	normalizedModel := ratio_setting.FormatMatchingModelName(modelName)
-	if normalizedModel == modelName {
-		return count, nil
-	}
-	return countEnabledChannelsByGroupModelAndTypeDB(group, normalizedModel, channelType)
+	return countEnabledChannelsByGroupAndTypeDB(group, channelType)
 }
 
-func countEnabledChannelsByGroupModelAndTypeDB(group string, modelName string, channelType int) (int, error) {
+func countEnabledChannelsByGroupAndTypeDB(group string, channelType int) (int, error) {
 	var count int64
 	err := DB.Table("abilities").
 		Joins("JOIN channels ON abilities.channel_id = channels.id").
-		Where("abilities."+commonGroupCol+" = ? AND abilities.model = ? AND abilities.enabled = ? AND channels.status = ? AND channels.type = ?", group, modelName, true, common.ChannelStatusEnabled, channelType).
+		Where("abilities."+commonGroupCol+" = ? AND abilities.enabled = ? AND channels.status = ? AND channels.type = ?", group, true, common.ChannelStatusEnabled, channelType).
 		Distinct("abilities.channel_id").
 		Count(&count).Error
 	return int(count), err

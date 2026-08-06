@@ -62,6 +62,26 @@ func TestAwsBedrockSlidingWindowLimiterRequiresAllWindowsBeforeRecording(t *test
 	assert.Equal(t, 58*time.Second, retryAfter)
 }
 
+func TestAwsBedrockSlidingWindowLimiterSeparatesWindowsByGroup(t *testing.T) {
+	limiter := &awsBedrockSlidingWindowLimiter{}
+	now := time.Unix(100, 0)
+
+	defaultLimits := buildAwsBedrockMemoryWindowLimits("default", 1, 0)
+	vipLimits := buildAwsBedrockMemoryWindowLimits("vip", 1, 0)
+
+	allowed, retryAfter := limiter.allowWindows(defaultLimits, now)
+	require.True(t, allowed)
+	assert.Zero(t, retryAfter)
+
+	allowed, retryAfter = limiter.allowWindows(vipLimits, now)
+	require.True(t, allowed)
+	assert.Zero(t, retryAfter)
+
+	allowed, retryAfter = limiter.allowWindows(defaultLimits, now.Add(time.Second))
+	require.False(t, allowed)
+	assert.Equal(t, 59*time.Second, retryAfter)
+}
+
 func TestScaleAwsBedrockRateLimitUsesChannelCount(t *testing.T) {
 	assert.Equal(t, 0, scaleAwsBedrockRateLimit(0, 8))
 	assert.Equal(t, 10, scaleAwsBedrockRateLimit(10, 0))
@@ -71,15 +91,34 @@ func TestScaleAwsBedrockRateLimitUsesChannelCount(t *testing.T) {
 func TestAwsBedrockMemoryQueueLimit(t *testing.T) {
 	limiter := &awsBedrockSlidingWindowLimiter{}
 
-	entered, leave := limiter.enterQueue(1)
+	entered, leave := limiter.enterQueue(awsBedrockRateLimitQueueKey("default"), 1)
 	require.True(t, entered)
 
-	entered, leaveSecond := limiter.enterQueue(1)
+	entered, leaveSecond := limiter.enterQueue(awsBedrockRateLimitQueueKey("default"), 1)
 	require.False(t, entered)
 	leaveSecond()
 
 	leave()
-	entered, leaveThird := limiter.enterQueue(1)
+	entered, leaveThird := limiter.enterQueue(awsBedrockRateLimitQueueKey("default"), 1)
 	require.True(t, entered)
 	leaveThird()
+}
+
+func TestAwsBedrockMemoryQueueLimitIsPerGroup(t *testing.T) {
+	limiter := &awsBedrockSlidingWindowLimiter{}
+
+	entered, leaveDefault := limiter.enterQueue(awsBedrockRateLimitQueueKey("default"), 1)
+	require.True(t, entered)
+	defer leaveDefault()
+
+	entered, leaveVip := limiter.enterQueue(awsBedrockRateLimitQueueKey("vip"), 1)
+	require.True(t, entered)
+	leaveVip()
+}
+
+func TestAwsBedrockRedisWindowLimitsUseGroupKeys(t *testing.T) {
+	limits := buildAwsBedrockRedisWindowLimits("vip", 10, 2)
+	require.Len(t, limits, 2)
+	assert.Equal(t, awsBedrockRateLimitMinuteKey("vip"), limits[0].Key)
+	assert.Equal(t, awsBedrockRateLimitSecondKey("vip"), limits[1].Key)
 }

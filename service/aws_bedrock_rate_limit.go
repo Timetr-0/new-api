@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,20 +20,21 @@ import (
 )
 
 const (
-	awsBedrockRateLimitScope     = "AWS_BEDROCK_RATE_LIMIT"
-	awsBedrockRateLimitMinuteKey = "rateLimit:aws_bedrock:requests:minute"
-	awsBedrockRateLimitSecondKey = "rateLimit:aws_bedrock:requests:second"
-	awsBedrockRateLimitQueueKey  = "rateLimit:aws_bedrock:queue"
-	awsBedrockRateLimitMinSleep  = 25 * time.Millisecond
-	awsBedrockRateLimitMaxSleep  = time.Second
+	awsBedrockRateLimitScope           = "AWS_BEDROCK_RATE_LIMIT"
+	awsBedrockRateLimitDefaultGroup    = "default"
+	awsBedrockRateLimitMinuteKeyPrefix = "rateLimit:aws_bedrock:requests:minute:"
+	awsBedrockRateLimitSecondKeyPrefix = "rateLimit:aws_bedrock:requests:second:"
+	awsBedrockRateLimitQueueKeyPrefix  = "rateLimit:aws_bedrock:queue:"
+	awsBedrockRateLimitMinSleep        = 25 * time.Millisecond
+	awsBedrockRateLimitMaxSleep        = time.Second
 )
 
 var awsBedrockMemoryLimiter = &awsBedrockSlidingWindowLimiter{}
 
 type awsBedrockSlidingWindowLimiter struct {
-	mu        sync.Mutex
-	windows   map[string][]time.Time
-	queueSize int
+	mu         sync.Mutex
+	windows    map[string][]time.Time
+	queueSizes map[string]int
 }
 
 type awsBedrockMemoryWindowLimit struct {
@@ -40,20 +43,26 @@ type awsBedrockMemoryWindowLimit struct {
 	window time.Duration
 }
 
-func (l *awsBedrockSlidingWindowLimiter) enterQueue(maxQueueSize int) (bool, func()) {
+func (l *awsBedrockSlidingWindowLimiter) enterQueue(queueKey string, maxQueueSize int) (bool, func()) {
 	if maxQueueSize <= 0 {
 		return true, func() {}
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.queueSize >= maxQueueSize {
+	if l.queueSizes == nil {
+		l.queueSizes = make(map[string]int)
+	}
+	if l.queueSizes[queueKey] >= maxQueueSize {
 		return false, func() {}
 	}
-	l.queueSize++
+	l.queueSizes[queueKey]++
 	return true, func() {
 		l.mu.Lock()
-		if l.queueSize > 0 {
-			l.queueSize--
+		if l.queueSizes[queueKey] > 0 {
+			l.queueSizes[queueKey]--
+		}
+		if l.queueSizes[queueKey] == 0 {
+			delete(l.queueSizes, queueKey)
 		}
 		l.mu.Unlock()
 	}
@@ -143,7 +152,8 @@ func WaitAwsBedrockRateLimit(c *gin.Context) *types.NewAPIError {
 		return nil
 	}
 
-	channelCount, err := awsBedrockRateLimitChannelCount(c)
+	group := awsBedrockRateLimitGroup(c)
+	channelCount, err := awsBedrockRateLimitChannelCount(group)
 	if err != nil {
 		return awsBedrockRateLimitError(fmt.Errorf("aws bedrock channel count failed: %w", err), http.StatusInternalServerError)
 	}
@@ -163,14 +173,14 @@ func WaitAwsBedrockRateLimit(c *gin.Context) *types.NewAPIError {
 	defer cancel()
 
 	if common.RedisEnabled && common.RDB != nil {
-		return waitAwsBedrockRedisRateLimit(ctx, minuteLimit, secondLimit)
+		return waitAwsBedrockRedisRateLimit(ctx, group, minuteLimit, secondLimit)
 	}
-	return waitAwsBedrockMemoryRateLimit(ctx, minuteLimit, secondLimit)
+	return waitAwsBedrockMemoryRateLimit(ctx, group, minuteLimit, secondLimit)
 }
 
-func awsBedrockRateLimitChannelCount(c *gin.Context) (int, error) {
+func awsBedrockRateLimitGroup(c *gin.Context) string {
 	if c == nil {
-		return 1, nil
+		return awsBedrockRateLimitDefaultGroup
 	}
 
 	group := common.GetContextKeyString(c, constant.ContextKeyAutoGroup)
@@ -181,15 +191,18 @@ func awsBedrockRateLimitChannelCount(c *gin.Context) (int, error) {
 		group = common.GetContextKeyString(c, constant.ContextKeyTokenGroup)
 	}
 	if group == "" || group == "auto" {
+		return awsBedrockRateLimitDefaultGroup
+	}
+	return group
+}
+
+func awsBedrockRateLimitChannelCount(group string) (int, error) {
+	group = strings.TrimSpace(group)
+	if group == "" {
 		return 1, nil
 	}
 
-	modelName := common.GetContextKeyString(c, constant.ContextKeyOriginalModel)
-	if modelName == "" {
-		return 1, nil
-	}
-
-	count, err := model.CountEnabledChannelsByGroupModelAndType(group, modelName, constant.ChannelTypeAws)
+	count, err := model.CountEnabledChannelsByGroupAndType(group, constant.ChannelTypeAws)
 	if err != nil {
 		return 0, err
 	}
@@ -214,8 +227,8 @@ func scaleAwsBedrockRateLimit(baseLimit int, channelCount int) int {
 	return baseLimit * channelCount
 }
 
-func waitAwsBedrockRedisRateLimit(ctx context.Context, minuteLimit int, secondLimit int) *types.NewAPIError {
-	entered, leave, err := enterAwsBedrockRedisQueue(ctx, setting.AwsBedrockRateLimitQueueMaxSize)
+func waitAwsBedrockRedisRateLimit(ctx context.Context, group string, minuteLimit int, secondLimit int) *types.NewAPIError {
+	entered, leave, err := enterAwsBedrockRedisQueue(ctx, group, setting.AwsBedrockRateLimitQueueMaxSize)
 	if err != nil {
 		return awsBedrockRateLimitError(fmt.Errorf("aws bedrock rate limit queue check failed: %w", err), http.StatusInternalServerError)
 	}
@@ -224,7 +237,7 @@ func waitAwsBedrockRedisRateLimit(ctx context.Context, minuteLimit int, secondLi
 	}
 	defer leave()
 
-	limits := buildAwsBedrockRedisWindowLimits(minuteLimit, secondLimit)
+	limits := buildAwsBedrockRedisWindowLimits(group, minuteLimit, secondLimit)
 	for {
 		allowed, retryAfter, err := limiter.AllowSlidingWindows(ctx, common.RDB, limits)
 		if err != nil {
@@ -239,14 +252,14 @@ func waitAwsBedrockRedisRateLimit(ctx context.Context, minuteLimit int, secondLi
 	}
 }
 
-func waitAwsBedrockMemoryRateLimit(ctx context.Context, minuteLimit int, secondLimit int) *types.NewAPIError {
-	entered, leave := awsBedrockMemoryLimiter.enterQueue(setting.AwsBedrockRateLimitQueueMaxSize)
+func waitAwsBedrockMemoryRateLimit(ctx context.Context, group string, minuteLimit int, secondLimit int) *types.NewAPIError {
+	entered, leave := awsBedrockMemoryLimiter.enterQueue(awsBedrockRateLimitQueueKey(group), setting.AwsBedrockRateLimitQueueMaxSize)
 	if !entered {
 		return awsBedrockRateLimitError(errors.New("aws bedrock rate limit queue is full"), http.StatusTooManyRequests)
 	}
 	defer leave()
 
-	limits := buildAwsBedrockMemoryWindowLimits(minuteLimit, secondLimit)
+	limits := buildAwsBedrockMemoryWindowLimits(group, minuteLimit, secondLimit)
 	for {
 		allowed, retryAfter := awsBedrockMemoryLimiter.allowWindows(limits, time.Now())
 		if allowed {
@@ -258,18 +271,18 @@ func waitAwsBedrockMemoryRateLimit(ctx context.Context, minuteLimit int, secondL
 	}
 }
 
-func buildAwsBedrockRedisWindowLimits(minuteLimit int, secondLimit int) []limiter.SlidingWindowLimit {
+func buildAwsBedrockRedisWindowLimits(group string, minuteLimit int, secondLimit int) []limiter.SlidingWindowLimit {
 	limits := make([]limiter.SlidingWindowLimit, 0, 2)
 	if minuteLimit > 0 {
 		limits = append(limits, limiter.SlidingWindowLimit{
-			Key:    awsBedrockRateLimitMinuteKey,
+			Key:    awsBedrockRateLimitMinuteKey(group),
 			Limit:  minuteLimit,
 			Window: time.Minute,
 		})
 	}
 	if secondLimit > 0 {
 		limits = append(limits, limiter.SlidingWindowLimit{
-			Key:    awsBedrockRateLimitSecondKey,
+			Key:    awsBedrockRateLimitSecondKey(group),
 			Limit:  secondLimit,
 			Window: time.Second,
 		})
@@ -277,18 +290,18 @@ func buildAwsBedrockRedisWindowLimits(minuteLimit int, secondLimit int) []limite
 	return limits
 }
 
-func buildAwsBedrockMemoryWindowLimits(minuteLimit int, secondLimit int) []awsBedrockMemoryWindowLimit {
+func buildAwsBedrockMemoryWindowLimits(group string, minuteLimit int, secondLimit int) []awsBedrockMemoryWindowLimit {
 	limits := make([]awsBedrockMemoryWindowLimit, 0, 2)
 	if minuteLimit > 0 {
 		limits = append(limits, awsBedrockMemoryWindowLimit{
-			key:    "minute",
+			key:    awsBedrockRateLimitMinuteKey(group),
 			limit:  minuteLimit,
 			window: time.Minute,
 		})
 	}
 	if secondLimit > 0 {
 		limits = append(limits, awsBedrockMemoryWindowLimit{
-			key:    "second",
+			key:    awsBedrockRateLimitSecondKey(group),
 			limit:  secondLimit,
 			window: time.Second,
 		})
@@ -296,22 +309,43 @@ func buildAwsBedrockMemoryWindowLimits(minuteLimit int, secondLimit int) []awsBe
 	return limits
 }
 
-func enterAwsBedrockRedisQueue(ctx context.Context, maxQueueSize int) (bool, func(), error) {
+func enterAwsBedrockRedisQueue(ctx context.Context, group string, maxQueueSize int) (bool, func(), error) {
 	if maxQueueSize <= 0 {
 		return true, func() {}, nil
 	}
-	current, err := common.RDB.Incr(ctx, awsBedrockRateLimitQueueKey).Result()
+	queueKey := awsBedrockRateLimitQueueKey(group)
+	current, err := common.RDB.Incr(ctx, queueKey).Result()
 	if err != nil {
 		return false, nil, err
 	}
-	_ = common.RDB.Expire(ctx, awsBedrockRateLimitQueueKey, 2*time.Minute).Err()
+	_ = common.RDB.Expire(ctx, queueKey, 2*time.Minute).Err()
 	if current > int64(maxQueueSize) {
-		_, _ = common.RDB.Decr(context.Background(), awsBedrockRateLimitQueueKey).Result()
+		_, _ = common.RDB.Decr(context.Background(), queueKey).Result()
 		return false, func() {}, nil
 	}
 	return true, func() {
-		_, _ = common.RDB.Decr(context.Background(), awsBedrockRateLimitQueueKey).Result()
+		_, _ = common.RDB.Decr(context.Background(), queueKey).Result()
 	}, nil
+}
+
+func awsBedrockRateLimitMinuteKey(group string) string {
+	return awsBedrockRateLimitMinuteKeyPrefix + awsBedrockRateLimitGroupKey(group)
+}
+
+func awsBedrockRateLimitSecondKey(group string) string {
+	return awsBedrockRateLimitSecondKeyPrefix + awsBedrockRateLimitGroupKey(group)
+}
+
+func awsBedrockRateLimitQueueKey(group string) string {
+	return awsBedrockRateLimitQueueKeyPrefix + awsBedrockRateLimitGroupKey(group)
+}
+
+func awsBedrockRateLimitGroupKey(group string) string {
+	group = strings.TrimSpace(group)
+	if group == "" || group == "auto" {
+		group = awsBedrockRateLimitDefaultGroup
+	}
+	return url.QueryEscape(group)
 }
 
 func waitAwsBedrockRateLimitRetry(ctx context.Context, retryAfter time.Duration) error {

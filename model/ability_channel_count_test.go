@@ -55,7 +55,7 @@ func insertAbilityChannelCountCandidate(
 	}).Error)
 }
 
-func TestCountEnabledChannelsByGroupModelAndTypeDB(t *testing.T) {
+func TestCountEnabledChannelsByGroupAndTypeDB(t *testing.T) {
 	resetAbilityChannelCountTestTables(t, false)
 
 	insertAbilityChannelCountCandidate(t, 1, "default", "claude-test", constant.ChannelTypeAws, common.ChannelStatusEnabled, true)
@@ -64,21 +64,35 @@ func TestCountEnabledChannelsByGroupModelAndTypeDB(t *testing.T) {
 	insertAbilityChannelCountCandidate(t, 4, "default", "claude-test", constant.ChannelTypeOpenAI, common.ChannelStatusEnabled, true)
 	insertAbilityChannelCountCandidate(t, 5, "vip", "claude-test", constant.ChannelTypeAws, common.ChannelStatusEnabled, true)
 	insertAbilityChannelCountCandidate(t, 6, "default", "claude-test", constant.ChannelTypeAws, common.ChannelStatusEnabled, false)
+	insertAbilityChannelCountCandidate(t, 7, "default", "claude-other", constant.ChannelTypeAws, common.ChannelStatusEnabled, true)
+	require.NoError(t, DB.Create(&Ability{
+		Group:     "default",
+		Model:     "claude-other",
+		ChannelId: 1,
+		Enabled:   true,
+	}).Error)
 
-	count, err := CountEnabledChannelsByGroupModelAndType("default", "claude-test", constant.ChannelTypeAws)
+	count, err := CountEnabledChannelsByGroupAndType("default", constant.ChannelTypeAws)
 	require.NoError(t, err)
-	assert.Equal(t, 2, count)
+	assert.Equal(t, 3, count)
 }
 
-func TestCountEnabledChannelsByGroupModelAndTypeCache(t *testing.T) {
+func TestCountEnabledChannelsByGroupAndTypeCache(t *testing.T) {
 	resetAbilityChannelCountTestTables(t, true)
 
 	insertAbilityChannelCountCandidate(t, 1, "default", "claude-test", constant.ChannelTypeAws, common.ChannelStatusEnabled, true)
 	insertAbilityChannelCountCandidate(t, 2, "default", "claude-test", constant.ChannelTypeAws, common.ChannelStatusEnabled, true)
 	insertAbilityChannelCountCandidate(t, 3, "default", "claude-test", constant.ChannelTypeOpenAI, common.ChannelStatusEnabled, true)
+	insertAbilityChannelCountCandidate(t, 4, "default", "claude-other", constant.ChannelTypeAws, common.ChannelStatusEnabled, true)
+	require.NoError(t, DB.Create(&Ability{
+		Group:     "default",
+		Model:     "claude-other",
+		ChannelId: 1,
+		Enabled:   true,
+	}).Error)
 	InitChannelCache()
 
-	count, err := CountEnabledChannelsByGroupModelAndType("default", "claude-test", constant.ChannelTypeAws)
+	count, err := CountEnabledChannelsByGroupAndType("default", constant.ChannelTypeAws)
 	require.NoError(t, err)
-	assert.Equal(t, 2, count)
+	assert.Equal(t, 3, count)
 }
