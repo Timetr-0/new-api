@@ -171,6 +171,9 @@ func (a *Adaptor) ConvertOpenAIResponsesRequest(c *gin.Context, info *relaycommo
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, requestBody io.Reader) (any, error) {
+	if info != nil {
+		a.setClientMode(info.ChannelOtherSettings.AwsKeyType)
+	}
 	if a.ClientMode == ClientModeApiKey {
 		if err := service.WaitAwsBedrockRateLimit(c); err != nil {
 			return nil, err
