@@ -8,6 +8,7 @@ import concurrent.futures
 import http.server
 import json
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -36,6 +37,19 @@ class RequestTarget:
     label: str
     group: str
     api_key: str
+
+
+@dataclass
+class ResourceSample:
+    elapsed_s: float
+    cpu_percent: float | None
+    rss_bytes: int | None
+    backlog_estimate: int
+    completed: int
+    ok_count: int
+    rate_limited_count: int
+    other_count: int
+    mock_received: int | None
 
 
 class MockBedrockState:
@@ -244,6 +258,43 @@ def parse_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def parse_size(value: str) -> int:
+    text = value.strip().lower()
+    if not text:
+        return 0
+    multipliers = {
+        "k": 1024,
+        "kb": 1024,
+        "m": 1024 * 1024,
+        "mb": 1024 * 1024,
+        "g": 1024 * 1024 * 1024,
+        "gb": 1024 * 1024 * 1024,
+    }
+    for suffix, multiplier in sorted(multipliers.items(), key=lambda item: len(item[0]), reverse=True):
+        if text.endswith(suffix):
+            return int(float(text[: -len(suffix)].strip()) * multiplier)
+    return int(float(text))
+
+
+def build_large_message(args: argparse.Namespace) -> str:
+    if args.payload_bytes:
+        target_bytes = parse_size(args.payload_bytes)
+    elif args.payload_tokens:
+        target_bytes = int(args.payload_tokens * args.bytes_per_token)
+    else:
+        return args.message
+
+    if target_bytes <= 0:
+        return args.message
+
+    seed = args.message or "hello"
+    if not seed.endswith(" "):
+        seed += " "
+    seed_bytes = seed.encode("utf-8")
+    repeats = target_bytes // len(seed_bytes) + 1
+    return (seed_bytes * repeats)[:target_bytes].decode("utf-8", errors="ignore")
+
+
 def sanitize_name_part(value: str) -> str:
     sanitized = "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in value)
     return sanitized.strip("-") or "group"
@@ -301,6 +352,7 @@ def mock_channel_name_for_index(base_name: str, index: int, count: int) -> str:
 
 
 def build_payload(args: argparse.Namespace) -> dict[str, Any]:
+    message = args.generated_message if args.generated_message is not None else args.message
     if args.format == "claude":
         return {
             "model": args.model,
@@ -308,7 +360,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
             "messages": [
                 {
                     "role": "user",
-                    "content": args.message,
+                    "content": message,
                 }
             ],
             "metadata": {
@@ -322,7 +374,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, Any]:
         "messages": [
             {
                 "role": "user",
-                "content": args.message,
+                "content": message,
             }
         ],
     }
@@ -401,6 +453,124 @@ def max_sliding_count(times: list[float], window: float) -> int:
     return max_count
 
 
+def format_bytes(value: int | None) -> str:
+    if value is None:
+        return "?"
+    units = ["B", "KiB", "MiB", "GiB"]
+    size = float(value)
+    for unit in units:
+        if size < 1024 or unit == units[-1]:
+            return f"{size:.1f}{unit}"
+        size /= 1024
+    return f"{size:.1f}GiB"
+
+
+def resolve_process_pid(args: argparse.Namespace) -> int | None:
+    if args.monitor_pid > 0:
+        return args.monitor_pid
+    if args.monitor_pid_file:
+        try:
+            return int(open(args.monitor_pid_file, encoding="utf-8").read().strip())
+        except Exception as exc:  # noqa: BLE001
+            print(f"process_monitor: cannot read pid file: {exc}", file=sys.stderr)
+            return None
+    if not args.monitor_process_name:
+        return None
+    try:
+        output = subprocess.check_output(
+            ["pgrep", "-n", "-f", args.monitor_process_name],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except Exception:
+        return None
+    return int(output) if output else None
+
+
+def read_process_stats(pid: int, previous: tuple[float, int] | None) -> tuple[float | None, int | None, tuple[float, int] | None]:
+    try:
+        with open(f"/proc/{pid}/stat", encoding="utf-8") as stat_file:
+            stat = stat_file.read().split()
+        utime_ticks = int(stat[13])
+        stime_ticks = int(stat[14])
+        total_ticks = utime_ticks + stime_ticks
+        now = time.monotonic()
+
+        rss_bytes = None
+        with open(f"/proc/{pid}/status", encoding="utf-8") as status_file:
+            for line in status_file:
+                if line.startswith("VmRSS:"):
+                    rss_bytes = int(line.split()[1]) * 1024
+                    break
+
+        cpu_percent = None
+        if previous is not None:
+            previous_time, previous_ticks = previous
+            elapsed = now - previous_time
+            if elapsed > 0:
+                ticks_per_second = os.sysconf(os.sysconf_names["SC_CLK_TCK"])
+                cpu_percent = ((total_ticks - previous_ticks) / ticks_per_second) / elapsed * 100
+        return cpu_percent, rss_bytes, (now, total_ticks)
+    except FileNotFoundError:
+        return None, None, None
+
+
+def monitor_resources(
+    args: argparse.Namespace,
+    start: float,
+    results: list[Result],
+    results_lock: threading.Lock,
+    stop_event: threading.Event,
+    mock_state: MockBedrockState | None,
+    samples: list[ResourceSample],
+) -> None:
+    pid = resolve_process_pid(args)
+    if pid is None and (args.monitor_pid or args.monitor_pid_file or args.monitor_process_name):
+        print("process_monitor: target process not found", file=sys.stderr)
+
+    previous_stats: tuple[float, int] | None = None
+    while not stop_event.wait(args.resource_sample_interval):
+        elapsed = time.monotonic() - start
+        with results_lock:
+            completed = len(results)
+            ok_count = sum(1 for item in results if item.status is not None and 200 <= item.status < 300)
+            rate_limited_count = sum(1 for item in results if item.status == 429)
+        other_count = completed - ok_count - rate_limited_count
+        scheduled = min(args.count, int(elapsed / (60.0 / args.rpm)) + 1)
+        backlog_estimate = max(0, scheduled - completed)
+        mock_received = None
+        if mock_state is not None:
+            with mock_state.lock:
+                mock_received = len(mock_state.arrivals)
+
+        cpu_percent = None
+        rss_bytes = None
+        if pid is not None:
+            cpu_percent, rss_bytes, previous_stats = read_process_stats(pid, previous_stats)
+
+        sample = ResourceSample(
+            elapsed_s=elapsed,
+            cpu_percent=cpu_percent,
+            rss_bytes=rss_bytes,
+            backlog_estimate=backlog_estimate,
+            completed=completed,
+            ok_count=ok_count,
+            rate_limited_count=rate_limited_count,
+            other_count=other_count,
+            mock_received=mock_received,
+        )
+        samples.append(sample)
+        cpu_text = "?" if sample.cpu_percent is None else f"{sample.cpu_percent:.1f}%"
+        mock_text = "?" if sample.mock_received is None else str(sample.mock_received)
+        print(
+            "resource_sample "
+            f"t={sample.elapsed_s:.1f}s cpu={cpu_text} rss={format_bytes(sample.rss_bytes)} "
+            f"scheduled_backlog={sample.backlog_estimate} completed={sample.completed} "
+            f"ok={sample.ok_count} 429={sample.rate_limited_count} other={sample.other_count} "
+            f"mock_received={mock_text}"
+        )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Send hello requests at a fixed RPM to test Bedrock upstream throttling."
@@ -433,11 +603,56 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--message", default="hello")
     parser.add_argument("--count", type=int, default=30, help="Total requests.")
+    parser.add_argument(
+        "--duration-seconds",
+        type=float,
+        default=0.0,
+        help="Run for this many seconds; when set, count is calculated from rpm.",
+    )
     parser.add_argument("--rpm", type=float, default=60.0, help="Start rate.")
     parser.add_argument("--max-workers", type=int, default=64)
     parser.add_argument("--timeout", type=float, default=120.0)
     parser.add_argument("--max-tokens", type=int, default=8)
     parser.add_argument("--body-bytes", type=int, default=2048)
+    parser.add_argument(
+        "--payload-tokens",
+        type=int,
+        default=0,
+        help="Generate a large prompt with approximately this many tokens.",
+    )
+    parser.add_argument(
+        "--bytes-per-token",
+        type=float,
+        default=4.0,
+        help="Estimated bytes per token used with --payload-tokens.",
+    )
+    parser.add_argument(
+        "--payload-bytes",
+        default="",
+        help="Generate a prompt with this byte size, e.g. 800k or 2m. Overrides --payload-tokens.",
+    )
+    parser.add_argument(
+        "--resource-sample-interval",
+        type=float,
+        default=5.0,
+        help="Seconds between resource samples.",
+    )
+    parser.add_argument(
+        "--monitor-pid",
+        type=int,
+        default=int(os.getenv("NEW_API_MONITOR_PID", "0") or "0"),
+        help="PID of the new-api process to sample.",
+    )
+    parser.add_argument(
+        "--monitor-pid-file",
+        default=os.getenv("NEW_API_MONITOR_PID_FILE", ""),
+        help="PID file for the new-api process.",
+    )
+    parser.add_argument(
+        "--monitor-process-name",
+        default=os.getenv("NEW_API_MONITOR_PROCESS_NAME", "new-api"),
+        help="Process name pattern used by pgrep when --monitor-pid is not set.",
+    )
     parser.add_argument("--affinity-key", default="")
     parser.add_argument("--metadata-user-id", default="bedrock-rate-limit-test")
     parser.add_argument(
@@ -511,6 +726,8 @@ def main() -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
+    if args.duration_seconds > 0:
+        args.count = max(1, int(args.rpm * args.duration_seconds / 60.0))
     if args.count < 1:
         print("--count must be positive", file=sys.stderr)
         return 2
@@ -520,6 +737,12 @@ def main() -> int:
     if args.mock_channels_per_group < 1:
         print("--mock-channels-per-group must be positive", file=sys.stderr)
         return 2
+    if args.resource_sample_interval <= 0:
+        print("--resource-sample-interval must be positive", file=sys.stderr)
+        return 2
+
+    args.generated_message = build_large_message(args)
+    payload_bytes = len(args.generated_message.encode("utf-8"))
 
     mock_server = None
     mock_state = None
@@ -574,11 +797,20 @@ def main() -> int:
         print(
             f"base_url={args.base_url} format={args.format} model={args.model} "
             f"count={args.count} rpm={args.rpm:g} interval={interval:.3f}s "
-            f"targets={','.join(target.label for target in targets)}"
+            f"payload_bytes={payload_bytes} targets={','.join(target.label for target in targets)}"
         )
         print("idx target status start_s latency_s body")
 
         results: list[Result] = []
+        results_lock = threading.Lock()
+        stop_monitor = threading.Event()
+        resource_samples: list[ResourceSample] = []
+        monitor_thread = threading.Thread(
+            target=monitor_resources,
+            args=(args, start, results, results_lock, stop_monitor, mock_state, resource_samples),
+            daemon=True,
+        )
+        monitor_thread.start()
         with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = []
             for index in range(1, args.count + 1):
@@ -588,7 +820,8 @@ def main() -> int:
 
             for future in concurrent.futures.as_completed(futures):
                 result = future.result()
-                results.append(result)
+                with results_lock:
+                    results.append(result)
                 start_s = result.started_at - start
                 latency_s = result.ended_at - result.started_at
                 status = result.status if result.status is not None else "ERR"
@@ -597,6 +830,8 @@ def main() -> int:
                     f"{result.index:03d} {result.target_label:>12} {status} "
                     f"{start_s:8.2f} {latency_s:9.2f} {detail}"
                 )
+        stop_monitor.set()
+        monitor_thread.join(timeout=2)
 
         results.sort(key=lambda item: item.index)
         ok_count = sum(1 for item in results if item.status is not None and 200 <= item.status < 300)
@@ -612,6 +847,45 @@ def main() -> int:
             f"rate_limited_429={rate_limited_count} other={error_count} "
             f"p50_latency={p50:.2f}s p95_latency={p95:.2f}s"
         )
+        elapsed_total = max(0.001, max(item.ended_at for item in results) - start)
+        ok_rpm = ok_count / elapsed_total * 60
+        sent_rpm = len(results) / elapsed_total * 60
+        backlog_growth_rpm = max(0.0, args.rpm - ok_rpm)
+        peak_backlog = max((sample.backlog_estimate for sample in resource_samples), default=0)
+        peak_rss = max(
+            (sample.rss_bytes for sample in resource_samples if sample.rss_bytes is not None),
+            default=None,
+        )
+        peak_cpu = max(
+            (sample.cpu_percent for sample in resource_samples if sample.cpu_percent is not None),
+            default=None,
+        )
+        drain_seconds = None
+        if ok_rpm > 0:
+            drain_seconds = peak_backlog / ok_rpm * 60
+        cpu_text = "?" if peak_cpu is None else f"{peak_cpu:.1f}%"
+        drain_text = "?" if drain_seconds is None else f"{drain_seconds:.1f}s"
+        print(
+            "load_analysis "
+            f"elapsed={elapsed_total:.1f}s sent_rpm={sent_rpm:.1f} accepted_rpm={ok_rpm:.1f} "
+            f"backlog_growth_rpm={backlog_growth_rpm:.1f} peak_backlog={peak_backlog} "
+            f"peak_rss={format_bytes(peak_rss)} peak_cpu={cpu_text} "
+            f"estimated_drain_time_at_observed_rate={drain_text}"
+        )
+        if rate_limited_count > 0:
+            print(
+                "load_conclusion: queue limit or timeout was reached; reduce incoming rpm, "
+                "raise effective Bedrock capacity, or lower queue timeout/max size."
+            )
+        elif backlog_growth_rpm > 0:
+            print(
+                "load_conclusion: incoming rate exceeded observed completion rate during the run; "
+                "a long enough burst can keep growing queued requests until timeout or queue-full."
+            )
+        else:
+            print(
+                "load_conclusion: observed completion rate kept up with incoming rate in this run."
+            )
         for target in targets:
             target_results = [item for item in results if item.target_label == target.label]
             target_ok = sum(
