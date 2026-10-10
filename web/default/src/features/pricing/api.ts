@@ -29,3 +29,28 @@ export async function getPricing(): Promise<PricingData> {
   const res = await api.get('/api/pricing')
   return res.data
 }
+
+export type ModelAPIExample = {
+  model_name: string
+  endpoint_type: string
+  language: 'curl' | 'python' | 'typescript' | 'javascript'
+  code: string
+}
+
+export async function getModelAPIExamples(model: string) {
+  const res = await api.get<{
+    success: boolean
+    message?: string
+    data: Record<string, Partial<Record<ModelAPIExample['language'], string>>>
+  }>('/api/model-api-examples', { params: { model } })
+  if (!res.data.success) throw new Error(res.data.message)
+  return res.data.data
+}
+
+export async function updateModelAPIExample(example: ModelAPIExample) {
+  const res = await api.put<{ success: boolean; message?: string }>(
+    '/api/models/api_example',
+    example
+  )
+  if (!res.data.success) throw new Error(res.data.message)
+}

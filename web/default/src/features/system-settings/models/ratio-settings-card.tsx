@@ -181,6 +181,7 @@ export function RatioSettingsCard({
       if (data.success) {
         toast.success(t('Model prices reset successfully'))
         queryClient.invalidateQueries({ queryKey: ['system-options'] })
+        queryClient.invalidateQueries({ queryKey: ['pricing'] })
         setConfirmOpen(false)
       } else {
         toast.error(data.message || t('Failed to reset model ratios'))

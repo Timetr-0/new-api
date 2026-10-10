@@ -16,10 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useQuery } from '@tanstack/react-query'
 import {
   ChevronRight,
   Gauge,
   KeyRound,
+  Pencil,
   ScrollText,
   Sigma,
   Zap,
@@ -37,9 +39,13 @@ import {
   staticDataTableClassNames as tableStyles,
 } from '@/components/data-table'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useStatus } from '@/hooks/use-status'
+import { ROLE } from '@/lib/roles'
+import { useAuthStore } from '@/stores/auth-store'
 
+import { getModelAPIExamples } from '../api'
 import {
   buildRateLimits,
   buildSupportedParameters,
@@ -48,6 +54,7 @@ import {
 } from '../lib/mock-stats'
 import { replaceModelInPath } from '../lib/model-helpers'
 import type { PricingModel } from '../types'
+import { ModelAPIExampleEditor } from './model-api-example-editor'
 
 // ---------------------------------------------------------------------------
 // Code-sample registry
@@ -109,7 +116,7 @@ function buildChatSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${bodyJson.replace(/\n/g, '\n     ')}'`,
+      `  -d '${bodyJson.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
 
@@ -177,7 +184,7 @@ function buildAnthropicSample(lang: Lang, ctx: SampleContext): string {
       `  -H "x-api-key: $${ctx.apiKeyEnv}" \\`,
       `  -H "anthropic-version: 2023-06-01" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -249,7 +256,7 @@ function buildGeminiSample(lang: Lang, ctx: SampleContext): string {
     return [
       `curl '${url}' \\`,
       `  -H 'Content-Type: application/json' \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -299,7 +306,7 @@ function buildEmbeddingSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -365,7 +372,7 @@ function buildImageSample(lang: Lang, ctx: SampleContext): string {
       `curl ${url} \\`,
       `  -H "Authorization: Bearer $${ctx.apiKeyEnv}" \\`,
       `  -H "Content-Type: application/json" \\`,
-      `  -d '${body.replace(/\n/g, '\n     ')}'`,
+      `  -d '${body.replaceAll('\n', '\n     ')}'`,
     ].join('\n')
   }
   if (lang === 'python') {
@@ -430,8 +437,9 @@ function buildSample(
 ): string {
   if (endpointType === 'anthropic') return buildAnthropicSample(lang, ctx)
   if (endpointType === 'gemini') return buildGeminiSample(lang, ctx)
-  if (endpointType === 'embeddings' || endpointType === 'jina-rerank')
+  if (endpointType === 'embeddings' || endpointType === 'jina-rerank') {
     return buildEmbeddingSample(lang, ctx)
+  }
   if (endpointType === 'image-generation') return buildImageSample(lang, ctx)
   return buildChatSample(lang, ctx)
 }
@@ -446,6 +454,15 @@ function CodeSamplesSection(props: {
 }) {
   const { t } = useTranslation()
   const { status } = useStatus()
+  const canEdit = useAuthStore(
+    (state) => (state.auth.user?.role ?? ROLE.GUEST) >= ROLE.ADMIN
+  )
+  const [editorOpen, setEditorOpen] = useState(false)
+  const { data: examples } = useQuery({
+    queryKey: ['model-api-examples', props.model.model_name],
+    queryFn: () => getModelAPIExamples(props.model.model_name),
+    staleTime: 5 * 60 * 1000,
+  })
 
   const baseUrl = useMemo(() => {
     const candidate =
@@ -487,17 +504,43 @@ function CodeSamplesSection(props: {
     return null
   }
 
-  const code = buildSample(lang, activeEndpoint.type, {
+  const generatedCode = buildSample(lang, activeEndpoint.type, {
     baseUrl,
     apiKeyEnv: 'NEW_API_KEY',
     modelName: props.model.model_name || '',
     endpointType: activeEndpoint.type,
     endpointPath: activeEndpoint.path,
   })
+  const code = examples?.[activeEndpoint.type]?.[lang] || generatedCode
 
   return (
     <section>
-      <SectionTitle icon={ScrollText}>{t('Code samples')}</SectionTitle>
+      <div className='flex items-center justify-between gap-2'>
+        <SectionTitle icon={ScrollText}>{t('Code samples')}</SectionTitle>
+        {canEdit && (
+          <Button
+            variant='outline'
+            size='sm'
+            onClick={() => setEditorOpen(true)}
+          >
+            <Pencil aria-hidden='true' className='size-3.5' />
+            {t('Edit code sample')}
+          </Button>
+        )}
+      </div>
+
+      {canEdit && editorOpen && (
+        <ModelAPIExampleEditor
+          key={`${props.model.model_name}:${activeEndpoint.type}:${lang}`}
+          example={{
+            model_name: props.model.model_name,
+            endpoint_type: activeEndpoint.type,
+            language: lang,
+            code,
+          }}
+          onOpenChange={setEditorOpen}
+        />
+      )}
 
       <div className='flex flex-wrap items-center gap-2'>
         {endpoints.length > 1 && (
